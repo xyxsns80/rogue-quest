@@ -14,8 +14,6 @@ export default class MainScene extends Phaser.Scene {
     const height = this.cameras.main.height;
     const user = DataManager.getCurrentUser();
 
-    console.log('MainScene create, 用户:', user?.username);
-
     if (!user) {
       this.scene.start('LoginScene');
       return;
@@ -307,21 +305,16 @@ export default class MainScene extends Phaser.Scene {
   }
 
   startAdventure() {
-    console.log('=== startAdventure 函数开始 ===');
     const run = DataManager.getCurrentRun();
-    console.log('当前冒险数据:', run);
     
     if (run && run.status === 'ongoing') {
-      console.log('继续冒险 -> BattleScene');
       this.scene.start('BattleScene', { continue: true });
     } else {
-      console.log('新冒险 -> BattleScene');
       if (run) {
         DataManager.clearRunData();
       }
       this.scene.start('BattleScene', { continue: false });
     }
-    console.log('=== startAdventure 函数结束 ===');
   }
 
   showMessage(msg: string) {

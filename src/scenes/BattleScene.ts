@@ -38,7 +38,6 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   init(data: { continue: boolean }) {
-    console.log('BattleScene init, continue:', data.continue);
     if (data.continue) {
       const run = DataManager.getCurrentRun();
       if (run) {
@@ -53,7 +52,6 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   create() {
-    console.log('BattleScene create');
     const width = this.cameras.main.width;
     const height = this.cameras.main.height;
 
