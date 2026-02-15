@@ -19,6 +19,11 @@ export default class MainScene extends Phaser.Scene {
       return;
     }
 
+    // 添加全局触摸监听
+    this.input.on('gameobjectdown', (_pointer: Phaser.Input.Pointer, gameObject: Phaser.GameObjects.GameObject) => {
+      console.log('gameobjectdown:', gameObject);
+    });
+
     // 背景
     this.add.rectangle(width / 2, height / 2, width, height, 0x1a1a2e);
 
