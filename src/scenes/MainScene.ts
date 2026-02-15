@@ -14,6 +14,8 @@ export default class MainScene extends Phaser.Scene {
     const height = this.cameras.main.height;
     const user = DataManager.getCurrentUser();
 
+    console.log('MainScene create, 用户:', user?.username);
+
     if (!user) {
       this.scene.start('LoginScene');
       return;
@@ -22,65 +24,33 @@ export default class MainScene extends Phaser.Scene {
     // 背景
     this.add.rectangle(width / 2, height / 2, width, height, 0x1a1a2e);
 
-    // ========== 布局计算 ==========
-    // 安全区域（避开刘海和底部手势条）
-    const safeTop = 50;
-    const safeBottom = 80;
-    
-    // 区域分配（从上到下）
-    const topBarHeight = 80;
-    const titleHeight = 100;
-    const adventureBtnHeight = 100;
-    const cultBtnsHeight = 70;
-    const funcBtnsHeight = 70;
-    const idleSectionHeight = 100;
-    
-    // 垂直间距
-    const gap = 15;
-    
-    // 计算各区域Y坐标
-    let currentY = safeTop + topBarHeight / 2;
+    // 顶部信息栏 (Y: 50-130)
+    this.createTopBar(width, 90, user);
 
-    // 顶部信息栏
-    this.createTopBar(width, currentY, user);
-    currentY += topBarHeight / 2 + gap;
-
-    // 游戏标题
-    currentY += titleHeight / 2;
-    this.createTitle(width, currentY);
-    currentY += titleHeight / 2 + gap;
-
-    // 核心按钮：开始/继续冒险
-    currentY += adventureBtnHeight / 2;
-    this.createAdventureButton(width, currentY);
-    currentY += adventureBtnHeight / 2 + gap;
-
-    // 养成入口
-    currentY += cultBtnsHeight / 2;
-    this.createCultivationButtons(width, currentY);
-    currentY += cultBtnsHeight / 2 + gap;
-
-    // 功能入口
-    currentY += funcBtnsHeight / 2;
-    this.createFunctionButtons(width, currentY);
-    currentY += funcBtnsHeight / 2 + gap;
-
-    // 底部放置收益
-    this.createIdleSection(width, height - safeBottom - idleSectionHeight / 2 - gap);
-
-    // 底部导航
-    this.createBottomNav(width, height - safeBottom / 2);
-
-    // 更新放置收益
-    this.updateIdleRewards();
-  }
-
-  createTitle(width: number, y: number) {
-    this.add.text(width / 2, y - 25, '🏆', { fontSize: '48px' }).setOrigin(0.5);
-    this.add.text(width / 2, y + 25, '肉鸽征途', {
+    // 游戏标题 (Y: 145-245)
+    this.add.text(width / 2, 195, '🏆', { fontSize: '48px' }).setOrigin(0.5);
+    this.add.text(width / 2, 245, '肉鸽征途', {
       fontSize: '28px',
       color: '#ffd700'
     }).setOrigin(0.5);
+
+    // 核心按钮：开始/继续冒险 (Y: 260-360)
+    this.createAdventureButton(width, 310);
+
+    // 养成入口 (Y: 375-445)
+    this.createCultivationButtons(width, 410);
+
+    // 功能入口 (Y: 460-530)
+    this.createFunctionButtons(width, 495);
+
+    // 底部放置收益 (Y: 640-740)
+    this.createIdleSection(width, 690);
+
+    // 底部导航 (Y: 760-810)
+    this.createBottomNav(width, 790);
+
+    // 更新放置收益
+    this.updateIdleRewards();
   }
 
   createTopBar(width: number, centerY: number, user: any) {
@@ -153,15 +123,23 @@ export default class MainScene extends Phaser.Scene {
       color: '#888888'
     }).setOrigin(0.5);
 
-    // 点击区域
-    const hitArea = this.add.rectangle(width / 2, centerY, btnWidth, btnHeight, 0x000000, 0);
+    // 点击区域 - 使用一个可见的区域来确保点击有效
+    const hitArea = this.add.rectangle(width / 2, centerY, btnWidth, btnHeight, 0xffffff, 0.01);
     hitArea.setInteractive({ useHandCursor: true });
+    
     hitArea.on('pointerdown', () => {
-      console.log('点击开始冒险');
+      console.log('=== 点击开始冒险按钮 ===');
       this.startAdventure();
     });
-    hitArea.on('pointerover', () => buttonBg.setFillStyle(0x667eea, 0.5));
-    hitArea.on('pointerout', () => buttonBg.setFillStyle(0x667eea, 0.3));
+    
+    hitArea.on('pointerover', () => {
+      console.log('鼠标移入按钮');
+      buttonBg.setFillStyle(0x667eea, 0.5);
+    });
+    
+    hitArea.on('pointerout', () => {
+      buttonBg.setFillStyle(0x667eea, 0.3);
+    });
   }
 
   createCultivationButtons(width: number, centerY: number) {
@@ -329,22 +307,21 @@ export default class MainScene extends Phaser.Scene {
   }
 
   startAdventure() {
-    console.log('startAdventure 被调用');
+    console.log('=== startAdventure 函数开始 ===');
     const run = DataManager.getCurrentRun();
     console.log('当前冒险数据:', run);
     
     if (run && run.status === 'ongoing') {
-      // 继续冒险
-      console.log('继续冒险');
+      console.log('继续冒险 -> BattleScene');
       this.scene.start('BattleScene', { continue: true });
     } else {
-      // 新冒险
-      console.log('新冒险');
+      console.log('新冒险 -> BattleScene');
       if (run) {
         DataManager.clearRunData();
       }
       this.scene.start('BattleScene', { continue: false });
     }
+    console.log('=== startAdventure 函数结束 ===');
   }
 
   showMessage(msg: string) {
