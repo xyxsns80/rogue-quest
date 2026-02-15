@@ -17,6 +17,10 @@ const config: Phaser.Types.Core.GameConfig = {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH
   },
+  // 明确启用输入，支持触摸
+  input: {
+    activePointers: 3
+  },
   banner: false,
   scene: [BootScene, LoginScene, MainScene, BattleScene]
 };
