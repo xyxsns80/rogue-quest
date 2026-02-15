@@ -125,8 +125,19 @@ export default class MainScene extends Phaser.Scene {
     const hitArea = this.add.rectangle(width / 2, centerY, btnWidth, btnHeight, 0xffffff, 0.01);
     hitArea.setInteractive({ useHandCursor: true });
     
+    // 添加多种事件监听以确保兼容性
     hitArea.on('pointerdown', () => {
-      console.log('=== 点击开始冒险按钮 ===');
+      console.log('=== pointerdown: 点击开始冒险按钮 ===');
+      this.startAdventure();
+    });
+    
+    hitArea.on('pointerup', () => {
+      console.log('=== pointerup: 点击开始冒险按钮 ===');
+    });
+    
+    // 添加点击事件作为备用
+    hitArea.on('click', () => {
+      console.log('=== click: 点击开始冒险按钮 ===');
       this.startAdventure();
     });
     
