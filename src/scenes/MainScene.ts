@@ -156,7 +156,10 @@ export default class MainScene extends Phaser.Scene {
     // 点击区域
     const hitArea = this.add.rectangle(width / 2, centerY, btnWidth, btnHeight, 0x000000, 0);
     hitArea.setInteractive({ useHandCursor: true });
-    hitArea.on('pointerdown', () => this.startAdventure());
+    hitArea.on('pointerdown', () => {
+      console.log('点击开始冒险');
+      this.startAdventure();
+    });
     hitArea.on('pointerover', () => buttonBg.setFillStyle(0x667eea, 0.5));
     hitArea.on('pointerout', () => buttonBg.setFillStyle(0x667eea, 0.3));
   }
@@ -326,13 +329,17 @@ export default class MainScene extends Phaser.Scene {
   }
 
   startAdventure() {
+    console.log('startAdventure 被调用');
     const run = DataManager.getCurrentRun();
+    console.log('当前冒险数据:', run);
     
     if (run && run.status === 'ongoing') {
       // 继续冒险
+      console.log('继续冒险');
       this.scene.start('BattleScene', { continue: true });
     } else {
       // 新冒险
+      console.log('新冒险');
       if (run) {
         DataManager.clearRunData();
       }
