@@ -368,7 +368,9 @@ export default class BattleScene extends Phaser.Scene {
   // ==================== 战斗流程 ====================
 
   async startBattle() {
-    console.log('=== startBattle 开始 === currentStage:', this.currentStage);
+    console.log('=== startBattle 开始 ===');
+    console.log('当前状态: currentStage=', this.currentStage, 'isBattleEnded=', this.isBattleEnded, 'isPaused=', this.isPaused);
+    console.log('英雄数量:', this.heroUnits.length, '敌人数量:', this.enemyUnits.length);
     
     // 完全重置战斗状态
     this.isBattleEnded = false;
@@ -382,14 +384,22 @@ export default class BattleScene extends Phaser.Scene {
     });
     this.enemyUnits = [];
     
-    console.log('敌人已清理，准备创建新敌人');
+    // 恢复英雄HP（每场战斗开始时恢复满血）
+    this.heroUnits.forEach(hero => {
+      hero.hp = hero.maxHp;
+      this.updateUnitHpBar(hero);
+    });
+    
+    console.log('敌人已清理，英雄HP已恢复');
     
     // 创建新敌人
     this.createEnemyUnits();
     
     console.log('敌人创建完成，数量:', this.enemyUnits.length);
+    console.log('英雄状态:', this.heroUnits.map(h => ({ name: h.name, hp: h.hp, maxHp: h.maxHp })));
     
     this.addLog('⚔️ 战斗开始！', '#ffd700');
+    this.updateBattleUI();
     
     // 初始化技能
     if (this.skills.length === 0) {
