@@ -58,10 +58,23 @@ export interface RunData {
 export class DataManager {
   private static currentUser: UserData | null = null;
   private static currentRun: RunData | null = null;
+  private static readonly LAST_USER_KEY = 'last_user_id';
 
   static init() {
-    // 初始化时可以做一些检查
-    console.log('DataManager initialized');
+    // 初始化时尝试恢复上次登录的用户
+    this.restoreLastUser();
+    console.log('DataManager initialized, user restored:', this.currentUser?.username);
+  }
+
+  // 恢复上次登录的用户
+  private static restoreLastUser() {
+    const lastUserId = localStorage.getItem(this.LAST_USER_KEY);
+    if (lastUserId) {
+      const user = this.loadUserData(lastUserId);
+      if (user) {
+        this.currentUser = user;
+      }
+    }
   }
 
   // 保存用户数据
@@ -82,6 +95,8 @@ export class DataManager {
     this.currentUser = user;
     user.lastLoginAt = Date.now();
     this.saveUserData(user);
+    // 保存最后登录的用户ID，用于刷新后恢复
+    localStorage.setItem(this.LAST_USER_KEY, user.userId);
   }
 
   // 获取当前用户
