@@ -170,61 +170,313 @@ function selectTarget(targets: Unit[]): Unit | null {
 
 ## 4. 技能系统
 
-### 4.1 技能触发
+### 4.1 技能触发时机
+
+```typescript
+type TriggerTiming = 
+  // 战斗级别
+  | 'on_battle_start'      // 战斗开始时
+  | 'on_battle_end'        // 战斗结束时
+  
+  // 回合级别
+  | 'on_round_start'       // 回合开始时
+  | 'on_round_end'         // 回合结束时
+  
+  // 行动级别
+  | 'on_action_start'      // 行动前
+  | 'on_action_end'        // 行动后
+  | 'on_attack'            // 攻击时
+  | 'on_kill'              // 击杀时
+  
+  // 受击级别
+  | 'on_be_attacked'       // 被攻击时（命中前）
+  | 'on_take_damage'       // 受到伤害时
+  | 'on_dodge'             // 闪避时
+  | 'on_death'             // 死亡时
+  
+  // 特殊
+  | 'on_ally_death'        // 队友死亡时
+  | 'on_enemy_death'       // 敌人死亡时
+  | 'on_low_hp';           // 低血量时（HP<30%）
+```
+
+### 4.2 技能次数限制
+
+```typescript
+interface SkillUsageLimit {
+  // 次数限制
+  perBattle: number;       // 每局游戏限制（-1=无限）
+  perCombat: number;       // 每次战斗限制（-1=无限）
+  perRound: number;        // 每回合限制（-1=无限）
+  
+  // 当前已使用
+  usedInBattle: number;    // 本局已用
+  usedInCombat: number;    // 本次战斗已用
+  usedInRound: number;     // 本回合已用
+  
+  // 检查是否可用
+  canUse(): boolean {
+    if (this.perBattle !== -1 && this.usedInBattle >= this.perBattle) return false;
+    if (this.perCombat !== -1 && this.usedInCombat >= this.perCombat) return false;
+    if (this.perRound !== -1 && this.usedInRound >= this.perRound) return false;
+    return true;
+  }
+}
+```
+
+### 4.3 完整技能结构
 
 ```typescript
 interface Skill {
   id: string;
   name: string;
   icon: string;
-  type: 'active' | 'passive';
+  description: string;
+  rarity: 'common' | 'rare' | 'epic' | 'legendary';
   
-  // 主动技能：CD + 发动几率
-  cooldown: number;        // 冷却回合数
-  currentCooldown: number; // 当前冷却
-  triggerChance: number;   // 发动几率（0-1）
+  // 触发条件
+  triggerTiming: TriggerTiming[];  // 可在多个时机触发
+  triggerChance: number;           // 触发几率（0-1）
+  triggerCondition?: (unit: Unit, context: BattleContext) => boolean;
+  
+  // 冷却
+  cooldown: number;                // 冷却回合数
+  currentCooldown: number;         // 当前冷却
+  
+  // 次数限制
+  usageLimit: SkillUsageLimit;
   
   // 效果
-  damageMultiplier: number;
-  targetType: 'single' | 'all' | 'self';
+  effects: SkillEffect[];
+  
+  // 目标
+  targetType: 'self' | 'single_enemy' | 'all_enemies' | 'single_ally' | 'all_allies';
+  targetCondition?: (target: Unit) => boolean;
   
   // 动画
   animation: {
-    type: 'melee' | 'ranged' | 'area';
+    type: 'melee' | 'ranged' | 'area' | 'buff' | 'self';
     effect: string;
+    projectile?: {
+      sprite: string;
+      speed: number;
+      trajectory: 'straight' | 'arc' | 'homing';
+    };
     duration: number;
   };
 }
-```
 
-### 4.2 技能发动判定
-
-```typescript
-function tryUseSkill(unit: Unit): Skill | null {
-  // 1. 获取可用技能（CD为0）
-  const availableSkills = unit.skills.filter(s => s.currentCooldown === 0);
-  
-  // 2. 遍历技能，检查发动几率
-  for (const skill of availableSkills) {
-    if (Math.random() < skill.triggerChance) {
-      return skill;
-    }
-  }
-  
-  // 3. 没有技能发动，使用普攻
-  return null;
+interface SkillEffect {
+  type: 'damage' | 'heal' | 'buff' | 'debuff' | 'summon';
+  value: number | string;          // 数值或公式
+  valueType: 'flat' | 'percent';   // 固定值或百分比
+  attribute?: string;              // 影响的属性
+  duration?: number;               // 持续回合数（buff/debuff）
 }
 ```
 
-### 4.3 技能示例
+### 4.4 技能触发流程
 
-| 技能名 | 类型 | CD | 发动率 | 效果 |
-|--------|------|-----|--------|------|
-| 普攻 | - | 0 | 100% | 基础伤害 |
-| 火球术 | 主动 | 3 | 80% | 150%伤害，远程 |
-| 暴击 | 被动 | 0 | 15% | 双倍伤害 |
-| 连击 | 主动 | 4 | 50% | 攻击3次 |
-| 治疗 | 主动 | 5 | 60% | 回复30%HP |
+```typescript
+// 战斗开始
+async function onBattleStart() {
+  for (const unit of allUnits) {
+    for (const skill of unit.skills) {
+      if (skill.triggerTiming.includes('on_battle_start')) {
+        await tryTriggerSkill(unit, skill);
+      }
+    }
+  }
+}
+
+// 回合开始
+async function onRoundStart() {
+  // 重置回合次数
+  for (const unit of allUnits) {
+    for (const skill of unit.skills) {
+      skill.usageLimit.usedInRound = 0;
+    }
+  }
+  
+  // 触发回合开始技能
+  for (const unit of allUnits) {
+    for (const skill of unit.skills) {
+      if (skill.triggerTiming.includes('on_round_start')) {
+        await tryTriggerSkill(unit, skill);
+      }
+    }
+  }
+}
+
+// 单位行动
+async function onUnitAction(unit: Unit) {
+  // 1. 行动前技能
+  await triggerSkills(unit, 'on_action_start');
+  
+  // 2. 选择目标和行动
+  const skill = selectActionSkill(unit);
+  const target = selectTarget(unit, skill);
+  
+  // 3. 执行攻击
+  if (skill) {
+    await executeSkill(unit, target, skill);
+  } else {
+    await executeBasicAttack(unit, target);
+  }
+  
+  // 4. 行动后技能
+  await triggerSkills(unit, 'on_action_end');
+}
+
+// 受到伤害
+async function onTakeDamage(target: Unit, damage: number, attacker: Unit) {
+  // 1. 被攻击技能（闪避等）
+  const dodgeSkills = target.skills.filter(s => 
+    s.triggerTiming.includes('on_be_attacked')
+  );
+  for (const skill of dodgeSkills) {
+    if (await tryTriggerSkill(target, skill)) {
+      // 可能闪避成功，不再受伤
+      return;
+    }
+  }
+  
+  // 2. 实际扣血
+  target.hp -= damage;
+  
+  // 3. 受伤技能
+  await triggerSkills(target, 'on_take_damage');
+  
+  // 4. 低血量技能
+  if (target.hp / target.maxHp < 0.3) {
+    await triggerSkills(target, 'on_low_hp');
+  }
+  
+  // 5. 攻击者的击杀/攻击技能
+  if (target.hp <= 0) {
+    await triggerSkills(attacker, 'on_kill');
+    await triggerSkills(target, 'on_death');
+  }
+}
+
+// 技能触发检查
+async function tryTriggerSkill(unit: Unit, skill: Skill): Promise<boolean> {
+  // 1. 检查冷却
+  if (skill.currentCooldown > 0) return false;
+  
+  // 2. 检查次数限制
+  if (!skill.usageLimit.canUse()) return false;
+  
+  // 3. 检查触发几率
+  if (Math.random() > skill.triggerChance) return false;
+  
+  // 4. 检查触发条件
+  if (skill.triggerCondition && !skill.triggerCondition(unit, context)) {
+    return false;
+  }
+  
+  // 5. 执行技能
+  await executeSkill(unit, null, skill);
+  
+  // 6. 更新冷却和次数
+  skill.currentCooldown = skill.cooldown;
+  skill.usageLimit.usedInBattle++;
+  skill.usageLimit.usedInCombat++;
+  skill.usageLimit.usedInRound++;
+  
+  return true;
+}
+```
+
+### 4.5 技能示例（完整版）
+
+#### 战斗开始触发
+
+| 技能名 | 触发时机 | 发动率 | 效果 | 每局限制 |
+|--------|----------|--------|------|----------|
+| 先声夺人 | on_battle_start | 100% | 全体敌人造成50%伤害 | 1次/局 |
+| 战吼 | on_battle_start | 100% | 全体友方攻击+10%（3回合） | 无限 |
+| 伏击 | on_battle_start | 50% | 随机秒杀一个敌人 | 1次/局 |
+
+#### 回合触发
+
+| 技能名 | 触发时机 | 发动率 | 效果 | 每回合限制 |
+|--------|----------|--------|------|------------|
+| 再生 | on_round_start | 100% | 回复5%HP | 无限 |
+| 燃烧 | on_round_end | 80% | 对敌人造成灼烧 | 无限 |
+| 蓄力 | on_round_end | 100% | 下回合伤害+20% | 无限 |
+
+#### 行动触发
+
+| 技能名 | 触发时机 | 发动率 | CD | 效果 | 每次战斗 |
+|--------|----------|--------|-----|------|----------|
+| 火球术 | on_attack | 80% | 3 | 150%伤害，远程 | 无限 |
+| 连击 | on_attack | 50% | 4 | 攻击3次 | 3次/战斗 |
+| 治疗 | on_action_start | 60% | 5 | 回复30%HP | 2次/战斗 |
+
+#### 受击触发
+
+| 技能名 | 触发时机 | 发动率 | 效果 | 每回合限制 |
+|--------|----------|--------|------|------------|
+| 闪避 | on_be_attacked | 20% | 完全闪避 | 无限 |
+| 反击 | on_take_damage | 30% | 反弹50%伤害 | 1次/回合 |
+| 铁壁 | on_take_damage | 100% | 伤害-10% | 无限 |
+| 狂暴 | on_low_hp | 100% | 伤害+50% | 1次/战斗 |
+
+#### 死亡触发
+
+| 技能名 | 触发时机 | 发动率 | 效果 | 限制 |
+|--------|----------|--------|------|------|
+| 自爆 | on_death | 100% | 对周围敌人造成伤害 | - |
+| 复活 | on_death | 30% | 满血复活 | 1次/局 |
+| 传承 | on_ally_death | 100% | 获得死者10%属性 | - |
+
+### 4.6 弹道类型
+
+```typescript
+type ProjectileTrajectory = 
+  | 'straight'   // 直线飞行
+  | 'arc'        // 抛物线
+  | 'homing'     // 追踪
+  | 'wave'       // 波浪形
+  | 'spiral';    // 螺旋形
+
+interface ProjectileConfig {
+  sprite: string;
+  trajectory: ProjectileTrajectory;
+  speed: number;
+  
+  // 特效
+  trail?: {
+    color: string;
+    length: number;
+  };
+  
+  // 命中特效
+  impactEffect?: {
+    sprite: string;
+    scale: number;
+    duration: number;
+  };
+}
+
+// 示例
+const fireball: ProjectileConfig = {
+  sprite: '🔥',
+  trajectory: 'straight',
+  speed: 400,
+  trail: { color: '#ff6600', length: 20 },
+  impactEffect: { sprite: '💥', scale: 1.5, duration: 300 }
+};
+
+const iceArrow: ProjectileConfig = {
+  sprite: '❄️',
+  trajectory: 'arc',
+  speed: 300,
+  trail: { color: '#88ccff', length: 15 },
+  impactEffect: { sprite: '✨', scale: 1.0, duration: 200 }
+};
+```
 
 ---
 
