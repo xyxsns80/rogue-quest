@@ -12,7 +12,6 @@ interface Skill {
   chance?: number;
   damage?: number;
   level: number;
-  cooldownText?: Phaser.GameObjects.Text;
 }
 
 export default class BattleScene extends Phaser.Scene {
@@ -27,11 +26,15 @@ export default class BattleScene extends Phaser.Scene {
   private isAutoMode: boolean = true;
   private battleLog: string[] = [];
   
-  private heroHpBar!: Phaser.GameObjects.Graphics;
-  private heroHpText!: Phaser.GameObjects.Text;
-  private goldText!: Phaser.GameObjects.Text;
-  private expText!: Phaser.GameObjects.Text;
-  private logContainer!: Phaser.GameObjects.Container;
+  // UI 元素
+  private battleLevelEl!: HTMLElement;
+  private battleHpFillEl!: HTMLElement;
+  private battleHpTextEl!: HTMLElement;
+  private battleGoldEl!: HTMLElement;
+  private battleExpEl!: HTMLElement;
+  private battleLogEl!: HTMLElement;
+  private battleModeEl!: HTMLElement;
+  private battleBackBtn!: HTMLElement;
 
   constructor() {
     super({ key: 'BattleScene' });
@@ -39,6 +42,7 @@ export default class BattleScene extends Phaser.Scene {
 
   init(data: { continue: boolean }) {
     console.log('=== BattleScene init ===', data);
+    
     if (data.continue) {
       const run = DataManager.getCurrentRun();
       if (run) {
@@ -54,95 +58,117 @@ export default class BattleScene extends Phaser.Scene {
 
   create() {
     console.log('=== BattleScene create ===');
-    const width = this.cameras.main.width;
-    const height = this.cameras.main.height;
-
-    // 背景
-    this.add.rectangle(width / 2, height / 2, width, height, 0x2d3436);
-
-    // 顶部信息栏
-    this.createTopBar(width);
-
-    // 战斗区域
-    this.createBattleArea(width, height);
-
-    // 技能按钮
-    this.createSkillButtons(width, height);
-
-    // 战斗日志
-    this.createBattleLog(width, height);
-
-    // 底部控制
-    this.createControls(width, height);
-
+    
+    // 显示战斗 UI
+    this.showUI('battle-ui');
+    
+    // 获取 UI 元素
+    this.initUIElements();
+    
+    // 更新 UI 显示
+    this.updateBattleUI();
+    
+    // 绑定事件
+    this.bindEvents();
+    
+    // 绘制背景
+    this.drawBackground();
+    
+    // 创建战斗区域
+    this.createBattleArea();
+    
     // 生成敌人
     this.spawnEnemies();
-
+    
     // 开始战斗
     this.startBattle();
   }
 
-  createTopBar(_width: number) {
-    this.add.rectangle(_width / 2, 40, _width, 80, 0x1a1a2e);
-
-    // 关卡
-    this.add.text(_width / 2, 20, `第 ${this.currentLevel} 关`, {
-      fontSize: '20px',
-      color: '#ffd700'
-    }).setOrigin(0.5);
-
-    // 金币
-    this.goldText = this.add.text(_width - 20, 30, `💰${this.gold}`, {
-      fontSize: '16px',
-      color: '#ffd700'
-    }).setOrigin(1, 0);
-
-    // 经验
-    this.expText = this.add.text(_width - 20, 55, `⚡${this.exp}`, {
-      fontSize: '14px',
-      color: '#7fff7f'
-    }).setOrigin(1, 0);
-
-    // 英雄血条
-    this.heroHpBar = this.add.graphics();
-    this.updateHeroHpBar();
+  showUI(uiId: string) {
+    // 隐藏所有 UI
+    document.querySelectorAll('.ui-container').forEach(ui => {
+      ui.classList.remove('active');
+    });
     
-    this.heroHpText = this.add.text(20, 55, `HP: ${this.heroHp}/${this.heroMaxHp}`, {
-      fontSize: '14px',
-      color: '#ffffff'
-    });
-
-    // 自动模式指示
-    const autoText = this.add.text(_width / 2, 55, this.isAutoMode ? '🤖 自动' : '👆 手动', {
-      fontSize: '12px',
-      color: this.isAutoMode ? '#4CAF50' : '#ff9800'
-    }).setOrigin(0.5);
-    autoText.setInteractive({ useHandCursor: true });
-    autoText.on('pointerdown', () => {
-      this.isAutoMode = !this.isAutoMode;
-      autoText.setText(this.isAutoMode ? '🤖 自动' : '👆 手动');
-      autoText.setColor(this.isAutoMode ? '#4CAF50' : '#ff9800');
-    });
+    // 显示目标 UI
+    const targetUI = document.getElementById(uiId);
+    if (targetUI) {
+      targetUI.classList.add('active');
+    }
   }
 
-  updateHeroHpBar() {
-    const width = this.cameras.main.width;
-    this.heroHpBar.clear();
-    
-    // 背景
-    this.heroHpBar.fillStyle(0x333333);
-    this.heroHpBar.fillRect(20, 35, width - 40, 15);
+  hideUI(uiId: string) {
+    const ui = document.getElementById(uiId);
+    if (ui) {
+      ui.classList.remove('active');
+    }
+  }
+
+  initUIElements() {
+    this.battleLevelEl = document.getElementById('battle-level')!;
+    this.battleHpFillEl = document.getElementById('battle-hp-fill')!;
+    this.battleHpTextEl = document.getElementById('battle-hp-text')!;
+    this.battleGoldEl = document.getElementById('battle-gold')!;
+    this.battleExpEl = document.getElementById('battle-exp')!;
+    this.battleLogEl = document.getElementById('battle-log-text')!;
+    this.battleModeEl = document.getElementById('battle-mode')!;
+    this.battleBackBtn = document.getElementById('battle-back')!;
+  }
+
+  updateBattleUI() {
+    // 关卡
+    this.battleLevelEl.textContent = `第 ${this.currentLevel} 关`;
     
     // 血条
-    const percent = this.heroHp / this.heroMaxHp;
-    this.heroHpBar.fillStyle(0xff4444);
-    this.heroHpBar.fillRect(20, 35, (width - 40) * percent, 15);
+    const hpPercent = Math.max(0, (this.heroHp / this.heroMaxHp) * 100);
+    this.battleHpFillEl.style.width = `${hpPercent}%`;
+    this.battleHpTextEl.textContent = `HP: ${Math.floor(this.heroHp)}/${this.heroMaxHp}`;
     
-    this.heroHpText.setText(`HP: ${Math.floor(this.heroHp)}/${this.heroMaxHp}`);
+    // 金币/经验
+    this.battleGoldEl.textContent = this.gold.toString();
+    this.battleExpEl.textContent = this.exp.toString();
   }
 
-  createBattleArea(_width: number, height: number) {
-    // 英雄
+  bindEvents() {
+    // 返回按钮
+    this.addTapListener(this.battleBackBtn, () => this.returnToMain());
+    
+    // 自动/手动切换
+    this.addTapListener(this.battleModeEl, () => {
+      this.isAutoMode = !this.isAutoMode;
+      this.battleModeEl.textContent = this.isAutoMode ? '🤖 自动' : '👆 手动';
+      this.battleModeEl.style.color = this.isAutoMode ? '#4CAF50' : '#ff9800';
+    });
+  }
+
+  addTapListener(element: HTMLElement, callback: () => void) {
+    let isTouched = false;
+    
+    element.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      isTouched = true;
+      callback();
+    }, { passive: false });
+    
+    element.addEventListener('click', (e) => {
+      if (!isTouched) {
+        e.preventDefault();
+        callback();
+      }
+      isTouched = false;
+    });
+  }
+
+  drawBackground() {
+    const graphics = this.add.graphics();
+    graphics.fillGradientStyle(0x2d3436, 0x2d3436, 0x1a1a2e, 0x1a1a2e, 1);
+    graphics.fillRect(0, 0, this.cameras.main.width, this.cameras.main.height);
+  }
+
+  createBattleArea() {
+    const height = this.cameras.main.height;
+    
+    // 英雄 - 左侧
     this.hero = this.add.container(100, height / 2);
     const heroSprite = this.add.text(0, 0, '🧙', { fontSize: '48px' }).setOrigin(0.5);
     this.hero.add(heroSprite);
@@ -173,109 +199,12 @@ export default class BattleScene extends Phaser.Scene {
       const enemySprite = this.add.text(0, 0, '👺', { fontSize: '40px' }).setOrigin(0.5);
       enemy.add(enemySprite);
       
-      // 敌人数据
       enemy.setData('hp', 50 + this.currentLevel * 10);
       enemy.setData('maxHp', 50 + this.currentLevel * 10);
       enemy.setData('attack', 5 + this.currentLevel * 2);
       
       this.enemies.push(enemy);
     }
-  }
-
-  createSkillButtons(width: number, height: number) {
-    const y = height - 200;
-    const skillWidth = 60;
-    const spacing = 10;
-    const startX = width / 2 - (skillWidth * 3 + spacing * 2) / 2;
-
-    // 初始技能
-    if (this.skills.length === 0) {
-      this.skills = [
-        {
-          id: 'fireball',
-          name: '火球术',
-          icon: '🔥',
-          type: 'active',
-          description: '造成攻击力150%伤害',
-          cooldown: 3,
-          damage: 1.5,
-          level: 1
-        },
-        {
-          id: 'critical',
-          name: '暴击',
-          icon: '💥',
-          type: 'passive',
-          description: '15%几率双倍伤害',
-          chance: 0.15,
-          level: 1
-        }
-      ];
-    }
-
-    this.skills.forEach((skill, i) => {
-      const x = startX + i * (skillWidth + spacing);
-      
-      const bg = this.add.rectangle(x, y, skillWidth, 60, 0x333333, 0.8);
-      bg.setStrokeStyle(2, skill.type === 'active' ? 0xff9800 : 0x4CAF50);
-      
-      this.add.text(x, y - 15, skill.icon, { fontSize: '24px' }).setOrigin(0.5);
-      this.add.text(x, y + 15, skill.name, {
-        fontSize: '10px',
-        color: '#ffffff'
-      }).setOrigin(0.5);
-
-      if (skill.type === 'active' && skill.cooldown) {
-        const cdText = this.add.text(x + 25, y - 25, `${skill.cooldown}`, {
-          fontSize: '12px',
-          color: '#ff4444'
-        });
-        skill.cooldownText = cdText;
-      }
-
-      bg.setInteractive({ useHandCursor: true });
-      bg.on('pointerdown', () => this.useSkill(skill));
-    });
-  }
-
-  createBattleLog(width: number, height: number) {
-    const y = height - 120;
-    
-    // 日志背景
-    this.add.rectangle(width / 2, y, width - 20, 80, 0x000000, 0.5);
-    
-    // 日志容器
-    this.logContainer = this.add.container(width / 2, y);
-  }
-
-  addLog(message: string, color: string = '#ffffff') {
-    this.battleLog.push(message);
-    if (this.battleLog.length > 3) {
-      this.battleLog.shift();
-    }
-
-    // 更新显示
-    this.logContainer.removeAll(true);
-    this.battleLog.forEach((log, i) => {
-      const text = this.add.text(0, -30 + i * 20, log, {
-        fontSize: '12px',
-        color: color
-      }).setOrigin(0.5);
-      this.logContainer.add(text);
-    });
-  }
-
-  createControls(_width: number, _height: number) {
-    const y = _height - 40;
-    
-    // 返回按钮
-    const backBtn = this.add.rectangle(60, y, 80, 35, 0x666666);
-    this.add.text(60, y, '🏠 返回', {
-      fontSize: '12px',
-      color: '#ffffff'
-    }).setOrigin(0.5);
-    backBtn.setInteractive({ useHandCursor: true });
-    backBtn.on('pointerdown', () => this.returnToMain());
   }
 
   startBattle() {
@@ -307,32 +236,24 @@ export default class BattleScene extends Phaser.Scene {
 
     // 自动使用技能
     if (this.isAutoMode) {
-      this.skills.forEach(skill => {
-        if (skill.type === 'active' && skill.cooldown === 0) {
-          this.useSkill(skill);
-        }
-      });
+      this.autoUseSkills();
     }
 
     // 更新技能冷却
-    this.skills.forEach(skill => {
-      if (skill.cooldown && skill.cooldown > 0) {
-        skill.cooldown--;
-        if (skill.cooldownText) {
-          skill.cooldownText.setText(skill.cooldown.toString());
-        }
-      }
-    });
+    this.updateSkillCooldowns();
 
     // 检查战斗结果
     this.checkBattleResult();
+    
+    // 更新 UI
+    this.updateBattleUI();
   }
 
   heroAttack() {
     if (this.enemies.length === 0) return;
 
     const target = this.enemies[0];
-    let damage = 10 + this.currentLevel * 2; // 基础攻击
+    let damage = 10 + this.currentLevel * 2;
 
     // 暴击判定
     const critSkill = this.skills.find(s => s.id === 'critical');
@@ -352,7 +273,6 @@ export default class BattleScene extends Phaser.Scene {
       yoyo: true
     });
 
-    // 检查敌人死亡
     if (target.getData('hp') <= 0) {
       this.killEnemy(target);
     }
@@ -361,12 +281,9 @@ export default class BattleScene extends Phaser.Scene {
   enemyAttack(enemy: Phaser.GameObjects.Container) {
     const damage = enemy.getData('attack') || 5;
     
-    // 闪避判定（可以后期添加）
     this.heroHp -= damage;
-    this.updateHeroHpBar();
     this.addLog(`敌人攻击造成 ${damage} 伤害`, '#ff4444');
 
-    // 敌人攻击动画
     this.tweens.add({
       targets: enemy,
       x: enemy.x - 20,
@@ -375,19 +292,54 @@ export default class BattleScene extends Phaser.Scene {
     });
   }
 
-  useSkill(skill: Skill) {
-    if (skill.type === 'active' && skill.cooldown && skill.cooldown > 0) {
-      this.addLog(`${skill.name} 冷却中...`, '#888888');
-      return;
+  autoUseSkills() {
+    if (this.skills.length === 0) {
+      this.skills = [
+        {
+          id: 'fireball',
+          name: '火球术',
+          icon: '🔥',
+          type: 'active',
+          description: '造成攻击力150%伤害',
+          cooldown: 0,
+          damage: 1.5,
+          level: 1
+        },
+        {
+          id: 'critical',
+          name: '暴击',
+          icon: '💥',
+          type: 'passive',
+          description: '15%几率双倍伤害',
+          chance: 0.15,
+          level: 1
+        }
+      ];
     }
 
+    this.skills.forEach(skill => {
+      if (skill.type === 'active' && skill.cooldown === 0 && this.enemies.length > 0) {
+        this.useSkill(skill);
+      }
+    });
+  }
+
+  updateSkillCooldowns() {
+    this.skills.forEach(skill => {
+      if (skill.cooldown && skill.cooldown > 0) {
+        skill.cooldown--;
+      }
+    });
+  }
+
+  useSkill(skill: Skill) {
     if (skill.id === 'fireball' && this.enemies.length > 0) {
       const target = this.enemies[0];
       const damage = (10 + this.currentLevel * 2) * (skill.damage || 1.5);
       target.setData('hp', target.getData('hp') - damage);
       this.addLog(`🔥 火球术造成 ${Math.floor(damage)} 伤害！`, '#ff9800');
       
-      skill.cooldown = 3; // 重置冷却
+      skill.cooldown = 3;
       
       if (target.getData('hp') <= 0) {
         this.killEnemy(target);
@@ -401,7 +353,6 @@ export default class BattleScene extends Phaser.Scene {
       this.enemies.splice(index, 1);
     }
 
-    // 死亡动画
     this.tweens.add({
       targets: enemy,
       alpha: 0,
@@ -410,18 +361,14 @@ export default class BattleScene extends Phaser.Scene {
       onComplete: () => enemy.destroy()
     });
 
-    // 奖励
     const goldReward = 10 + this.currentLevel * 5;
     const expReward = 5 + this.currentLevel * 3;
     
     this.gold += goldReward;
     this.exp += expReward;
-    this.goldText.setText(`💰${this.gold}`);
-    this.expText.setText(`⚡${this.exp}`);
 
     this.addLog(`击杀敌人！+${goldReward}💰 +${expReward}⚡`, '#ffd700');
 
-    // 检查升级
     this.checkLevelUp();
   }
 
@@ -437,7 +384,7 @@ export default class BattleScene extends Phaser.Scene {
       this.heroHp = this.heroMaxHp;
       
       this.addLog(`🎉 升级！等级 ${user.level}`, '#ffd700');
-      this.updateHeroHpBar();
+      this.updateBattleUI();
       
       // 技能选择
       this.showSkillSelection();
@@ -445,14 +392,17 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   showSkillSelection() {
+    // 暂停战斗
+    this.time.paused = true;
+
     const width = this.cameras.main.width;
     const height = this.cameras.main.height;
 
-    // 遮罩
+    // 创建遮罩
     const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.7);
     
     // 标题
-    this.add.text(width / 2, 150, '选择技能升级', {
+    const title = this.add.text(width / 2, 150, '选择技能升级', {
       fontSize: '24px',
       color: '#ffd700'
     }).setOrigin(0.5);
@@ -464,31 +414,38 @@ export default class BattleScene extends Phaser.Scene {
       { id: 'heal', name: '治疗', icon: '💚', desc: '回复30%HP' }
     ];
 
-    // 暂停战斗，显示选择
-    this.time.paused = true;
+    const buttons: Phaser.GameObjects.Rectangle[] = [];
+    const texts: Phaser.GameObjects.Text[] = [];
 
     availableSkills.forEach((skill, i) => {
-      const x = width / 2;
       const y = 250 + i * 80;
       
-      const btn = this.add.rectangle(x, y, width - 40, 60, 0x667eea, 0.8);
+      const btn = this.add.rectangle(width / 2, y, width - 40, 60, 0x667eea, 0.8);
       btn.setStrokeStyle(2, 0x667eea);
       
-      this.add.text(x - 100, y, skill.icon, { fontSize: '32px' }).setOrigin(0.5);
-      this.add.text(x, y - 10, skill.name, {
+      const iconText = this.add.text(width / 2 - 100, y, skill.icon, { fontSize: '32px' }).setOrigin(0.5);
+      const nameText = this.add.text(width / 2, y - 10, skill.name, {
         fontSize: '16px',
         color: '#ffffff'
       }).setOrigin(0.5);
-      this.add.text(x, y + 15, skill.desc, {
+      const descText = this.add.text(width / 2, y + 15, skill.desc, {
         fontSize: '12px',
         color: '#888888'
       }).setOrigin(0.5);
 
+      buttons.push(btn);
+      texts.push(iconText, nameText, descText);
+
       btn.setInteractive({ useHandCursor: true });
       btn.on('pointerdown', () => {
         this.selectSkill(skill);
+        
+        // 清理所有元素
         overlay.destroy();
-        btn.destroy();
+        title.destroy();
+        buttons.forEach(b => b.destroy());
+        texts.forEach(t => t.destroy());
+        
         this.time.paused = false;
       });
     });
@@ -497,7 +454,6 @@ export default class BattleScene extends Phaser.Scene {
   selectSkill(skill: any) {
     if (skill.id === 'heal') {
       this.heroHp = Math.min(this.heroMaxHp, this.heroHp + this.heroMaxHp * 0.3);
-      this.updateHeroHpBar();
       this.addLog('💚 恢复 30% HP！', '#4CAF50');
     } else if (skill.id === 'fireball2') {
       const fireball = this.skills.find(s => s.id === 'fireball');
@@ -512,15 +468,15 @@ export default class BattleScene extends Phaser.Scene {
         this.addLog('💥 暴击率提升！', '#ffd700');
       }
     }
+    
+    this.updateBattleUI();
   }
 
   checkBattleResult() {
-    // 失败
     if (this.heroHp <= 0) {
       this.battleDefeat();
     }
     
-    // 胜利
     if (this.enemies.length === 0) {
       this.battleVictory();
     }
@@ -532,10 +488,8 @@ export default class BattleScene extends Phaser.Scene {
     this.currentLevel++;
     
     if (this.currentLevel > 3) {
-      // 通关
       this.showResult('通关成功！', true);
     } else {
-      // 继续下一关
       this.saveRun('ongoing');
       
       this.time.delayedCall(1000, () => {
@@ -552,23 +506,19 @@ export default class BattleScene extends Phaser.Scene {
     const width = this.cameras.main.width;
     const height = this.cameras.main.height;
 
-    // 遮罩
     this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.8);
 
-    // 结果文字
     const color = isVictory ? '#4CAF50' : '#ff4444';
     this.add.text(width / 2, height / 2 - 50, message, {
       fontSize: '32px',
       color: color
     }).setOrigin(0.5);
 
-    // 奖励显示
     this.add.text(width / 2, height / 2, `获得: ${this.gold}💰 ${this.exp}⚡`, {
       fontSize: '20px',
       color: '#ffd700'
     }).setOrigin(0.5);
 
-    // 返回按钮
     const btn = this.add.rectangle(width / 2, height / 2 + 80, 150, 50, 0x667eea);
     this.add.text(width / 2, height / 2 + 80, '返回主界面', {
       fontSize: '18px',
@@ -580,7 +530,6 @@ export default class BattleScene extends Phaser.Scene {
       this.returnToMain(isVictory);
     });
 
-    // 保存结果
     this.saveRun(isVictory ? 'completed' : 'failed');
   }
 
@@ -605,7 +554,6 @@ export default class BattleScene extends Phaser.Scene {
     };
 
     if (status === 'completed' || status === 'failed') {
-      // 结算到账号
       user.gold += this.gold;
       user.statistics.totalRuns++;
       if (this.currentLevel > user.statistics.bestLevel) {
@@ -619,6 +567,22 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   returnToMain(_isVictory: boolean = false) {
+    this.hideUI('battle-ui');
     this.scene.start('MainScene');
+  }
+
+  addLog(message: string, color: string = '#ffffff') {
+    this.battleLog.push(message);
+    if (this.battleLog.length > 3) {
+      this.battleLog.shift();
+    }
+
+    this.battleLogEl.innerHTML = this.battleLog
+      .map(log => `<span style="color:${color}">${log}</span>`)
+      .join('<br>');
+  }
+
+  shutdown() {
+    this.hideUI('battle-ui');
   }
 }

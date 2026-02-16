@@ -2,10 +2,6 @@ import Phaser from 'phaser';
 import { DataManager } from '../utils/DataManager';
 
 export default class MainScene extends Phaser.Scene {
-  private idleAccumulatedText!: HTMLElement;
-  private adventureBtn!: HTMLElement;
-  private adventureSubtitle!: HTMLElement;
-  private uiOverlay!: HTMLElement;
   private toastEl!: HTMLElement;
 
   constructor() {
@@ -13,44 +9,57 @@ export default class MainScene extends Phaser.Scene {
   }
 
   create() {
+    console.log('=== MainScene create ===');
+    
     const user = DataManager.getCurrentUser();
-
     if (!user) {
-      this.scene.start('LoginScene');
+      console.log('No user, going to login');
+      this.showUI('login-ui');
       return;
     }
 
-    // 获取 HTML 元素引用
-    this.uiOverlay = document.getElementById('ui-overlay')!;
-    this.idleAccumulatedText = document.getElementById('idle-accumulated')!;
-    this.adventureBtn = document.getElementById('adventure-btn')!;
-    this.adventureSubtitle = document.getElementById('adventure-subtitle')!;
+    console.log('User found:', user.username);
+    
+    // 获取 Toast 元素
     this.toastEl = document.getElementById('toast')!;
-
-    // 显示 UI
-    this.uiOverlay.classList.add('active');
-
+    
+    // 显示主界面
+    this.showUI('main-ui');
+    
     // 更新玩家信息
     this.updatePlayerInfo(user);
-
-    // 更新按钮状态
+    
+    // 更新冒险按钮状态
     this.updateAdventureButton();
-
+    
     // 更新放置收益
     this.updateIdleRewards();
-
+    
     // 绑定事件
     this.bindEvents();
-
-    // 绘制背景（保持 Phaser 画布有内容）
-    this.add.rectangle(195, 422, 390, 844, 0x1a1a2e);
     
-    // 绘制标题（可选，也可以用 HTML）
-    this.add.text(195, 245, '🏆', { fontSize: '48px' }).setOrigin(0.5);
-    this.add.text(195, 295, '肉鸽征途', {
-      fontSize: '28px',
-      color: '#ffd700'
-    }).setOrigin(0.5);
+    // 绘制背景（Phaser 层）
+    this.drawBackground();
+  }
+
+  showUI(uiId: string) {
+    // 隐藏所有 UI
+    document.querySelectorAll('.ui-container').forEach(ui => {
+      ui.classList.remove('active');
+    });
+    
+    // 显示目标 UI
+    const targetUI = document.getElementById(uiId);
+    if (targetUI) {
+      targetUI.classList.add('active');
+    }
+  }
+
+  drawBackground() {
+    // 简单的渐变背景
+    const graphics = this.add.graphics();
+    graphics.fillGradientStyle(0x1a1a2e, 0x1a1a2e, 0x16213e, 0x16213e, 1);
+    graphics.fillRect(0, 0, this.cameras.main.width, this.cameras.main.height);
   }
 
   updatePlayerInfo(user: any) {
@@ -80,9 +89,11 @@ export default class MainScene extends Phaser.Scene {
       }
     }
 
-    const titleEl = this.adventureBtn.querySelector('.title');
+    const titleEl = document.querySelector('.adventure-btn .title');
+    const subtitleEl = document.getElementById('adventure-subtitle');
+    
     if (titleEl) titleEl.textContent = buttonText;
-    this.adventureSubtitle.textContent = subText;
+    if (subtitleEl) subtitleEl.textContent = subText;
   }
 
   updateIdleRewards() {
@@ -96,62 +107,68 @@ export default class MainScene extends Phaser.Scene {
     const accumulated = Math.min(elapsed * rate, 12 * rate);
 
     const rateEl = document.getElementById('idle-rate');
+    const accumulatedEl = document.getElementById('idle-accumulated');
+    
     if (rateEl) rateEl.textContent = rate.toString();
-    this.idleAccumulatedText.textContent = Math.floor(accumulated).toString();
+    if (accumulatedEl) accumulatedEl.textContent = Math.floor(accumulated).toString();
   }
 
   bindEvents() {
-    // 开始冒险按钮 - 使用 touchstart 更灵敏
-    const handleAdventureClick = (e: Event) => {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log('Adventure button clicked/touched');
-      this.startAdventure();
-    };
-    
-    this.adventureBtn.addEventListener('click', handleAdventureClick);
-    this.adventureBtn.addEventListener('touchstart', handleAdventureClick, { passive: false });
+    // 开始冒险按钮
+    const adventureBtn = document.getElementById('adventure-btn');
+    if (adventureBtn) {
+      this.addTapListener(adventureBtn, () => this.startAdventure());
+    }
 
     // 功能按钮
     document.querySelectorAll('.func-btn').forEach(btn => {
-      const handleFuncClick = (e: Event) => {
-        e.preventDefault();
-        this.showMessage('功能开发中...');
-      };
-      btn.addEventListener('click', handleFuncClick);
-      btn.addEventListener('touchstart', handleFuncClick, { passive: false });
+      this.addTapListener(btn as HTMLElement, () => {
+        const action = btn.getAttribute('data-action');
+        this.showMessage(`${action} 功能开发中...`);
+      });
     });
 
     // 领取按钮
     const collectBtn = document.getElementById('collect-btn');
     if (collectBtn) {
-      const handleCollect = (e: Event) => {
-        e.preventDefault();
-        this.collectIdleRewards();
-      };
-      collectBtn.addEventListener('click', handleCollect);
-      collectBtn.addEventListener('touchstart', handleCollect, { passive: false });
+      this.addTapListener(collectBtn, () => this.collectIdleRewards());
     }
 
     // 加速按钮
     const speedBtn = document.getElementById('speed-btn');
     if (speedBtn) {
-      const handleSpeed = (e: Event) => {
-        e.preventDefault();
+      this.addTapListener(speedBtn, () => {
         this.showMessage('观看广告获得2小时收益');
-      };
-      speedBtn.addEventListener('click', handleSpeed);
-      speedBtn.addEventListener('touchstart', handleSpeed, { passive: false });
+      });
     }
 
     // 底部导航
     document.querySelectorAll('.nav-item').forEach(item => {
-      const handleNavClick = (e: Event) => {
+      this.addTapListener(item as HTMLElement, () => {
+        const action = item.getAttribute('data-action');
+        this.showMessage(`${action} 功能开发中...`);
+      });
+    });
+  }
+
+  // 统一的触摸/点击事件处理
+  addTapListener(element: HTMLElement, callback: () => void) {
+    let isTouched = false;
+    
+    // touchstart - 最快响应
+    element.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      isTouched = true;
+      callback();
+    }, { passive: false });
+    
+    // click - 作为 fallback
+    element.addEventListener('click', (e) => {
+      if (!isTouched) {
         e.preventDefault();
-        this.showMessage('功能开发中...');
-      };
-      item.addEventListener('click', handleNavClick);
-      item.addEventListener('touchstart', handleNavClick, { passive: false });
+        callback();
+      }
+      isTouched = false;
     });
   }
 
@@ -171,7 +188,9 @@ export default class MainScene extends Phaser.Scene {
       DataManager.updateUserData({ gold: user.gold, idleRewards: user.idleRewards });
       
       this.updatePlayerInfo(user);
-      this.idleAccumulatedText.textContent = '0';
+      const accumulatedEl = document.getElementById('idle-accumulated');
+      if (accumulatedEl) accumulatedEl.textContent = '0';
+      
       this.showMessage(`获得 ${accumulated} 金币！`);
     } else {
       this.showMessage('暂无收益可领取');
@@ -179,30 +198,40 @@ export default class MainScene extends Phaser.Scene {
   }
 
   startAdventure() {
-    console.log('=== startAdventure called ===');
+    console.log('=== startAdventure ===');
     
-    // 隐藏 UI
-    this.uiOverlay.classList.remove('active');
+    // 隐藏主界面 UI
+    this.hideUI('main-ui');
     
     const run = DataManager.getCurrentRun();
-    console.log('Current run:', run);
     
-    // 先停止当前场景的输入处理
+    // 禁用输入，防止重复点击
     this.input.enabled = false;
     
     if (run && run.status === 'ongoing') {
-      console.log('Starting BattleScene with continue=true');
+      console.log('Continuing existing run');
       this.scene.start('BattleScene', { continue: true });
     } else {
       if (run) {
         DataManager.clearRunData();
       }
-      console.log('Starting BattleScene with continue=false');
+      console.log('Starting new run');
       this.scene.start('BattleScene', { continue: false });
     }
   }
 
+  hideUI(uiId: string) {
+    const ui = document.getElementById(uiId);
+    if (ui) {
+      ui.classList.remove('active');
+    }
+  }
+
   showMessage(msg: string) {
+    if (!this.toastEl) {
+      this.toastEl = document.getElementById('toast')!;
+    }
+    
     this.toastEl.textContent = msg;
     this.toastEl.classList.add('show');
     
@@ -219,6 +248,6 @@ export default class MainScene extends Phaser.Scene {
 
   shutdown() {
     // 离开场景时隐藏 UI
-    this.uiOverlay.classList.remove('active');
+    this.hideUI('main-ui');
   }
 }
