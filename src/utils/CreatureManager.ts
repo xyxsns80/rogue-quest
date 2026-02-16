@@ -87,34 +87,56 @@ export class CreatureManager {
   
   // 生成肉鸽选择
   generateChoices(): CreatureChoice[] {
-    const available = this.getAvailableCreatures();
-    if (available.length === 0) {
-      return [];
+    console.log('=== generateChoices ===');
+    console.log('当前队伍:', this.creatures.length, '/', this.teamSize);
+    
+    const choices: CreatureChoice[] = [];
+    
+    if (this.isTeamFull()) {
+      // 队伍已满，只返回可以升星的生物
+      console.log('队伍已满，只生成升星选项');
+      this.creatures.forEach(creature => {
+        if (creature.star < 3) {
+          const def = getCreatureById(creature.creatureId);
+          if (def) {
+            choices.push({
+              type: 'upgrade',
+              creature: def,
+              fromStar: creature.star,
+              toStar: creature.star + 1,
+            });
+          }
+        }
+      });
+    } else {
+      // 队伍未满，返回所有可用生物
+      const available = this.getAvailableCreatures();
+      const shuffled = [...available].sort(() => Math.random() - 0.5);
+      const selected = shuffled.slice(0, 3);
+      
+      selected.forEach(creature => {
+        const existing = this.creatures.find(c => c.creatureId === creature.id);
+        
+        if (existing) {
+          // 升星
+          choices.push({
+            type: 'upgrade',
+            creature,
+            fromStar: existing.star,
+            toStar: existing.star + 1,
+          });
+        } else {
+          // 新获得
+          choices.push({
+            type: 'new',
+            creature,
+          });
+        }
+      });
     }
     
-    // 随机选3个
-    const shuffled = [...available].sort(() => Math.random() - 0.5);
-    const selected = shuffled.slice(0, 3);
-    
-    return selected.map(creature => {
-      const existing = this.creatures.find(c => c.creatureId === creature.id);
-      
-      if (existing) {
-        // 升星
-        return {
-          type: 'upgrade',
-          creature,
-          fromStar: existing.star,
-          toStar: existing.star + 1,
-        };
-      } else {
-        // 新获得
-        return {
-          type: 'new',
-          creature,
-        };
-      }
-    });
+    console.log('生成选项:', choices.length, choices.map(c => `${c.creature.name}(${c.type})`).join(', '));
+    return choices;
   }
   
   // 计算羁绊
