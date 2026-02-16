@@ -628,57 +628,193 @@ interface UnitHealthBar {
 
 ## 6. 战斗流程详细设计
 
-### 6.1 回合执行流程
+### 6.1 回合时间 = 动作时间
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              回合时间 = 动作表演时间之和                  │
+└─────────────────────────────────────────────────────────┘
+
+不是固定时间间隔，而是：
+回合时间 = Σ(所有单位的动作时间)
+
+单个单位动作时间 = 动画时间 + 特效时间 + 等待时间
+  - 跳跃攻击：300ms（去） + 100ms（攻击） + 300ms（回）
+  - 远程攻击：200ms（前摇） + 飞行时间 + 200ms（命中特效）
+  - 技能释放：根据技能配置
+
+示例回合流程：
+  英雄A攻击（800ms）→ 敌人B攻击（800ms）→ 英雄C攻击（800ms）→ 敌人D攻击（800ms）
+  总回合时间 ≈ 3.2秒
+```
+
+### 6.2 目标选择算法
 
 ```typescript
-async function executeRound() {
-  // 1. 确定行动顺序（速度排序）
-  const actionOrder = sortBySpeed([...heroUnits, ...enemyUnits]);
+function selectTarget(attacker: Unit, enemies: Unit[]): Unit | null {
+  // 1. 过滤存活敌人
+  const aliveEnemies = enemies.filter(e => e.hp > 0);
+  if (aliveEnemies.length === 0) return null;
   
-  // 2. 依次执行每个单位的行动
-  for (const unit of actionOrder) {
-    if (unit.hp <= 0) continue; // 已死亡跳过
-    
-    // 选择目标
-    const target = selectTarget(unit);
-    if (!target) continue;
-    
-    // 尝试使用技能
-    const skill = tryUseSkill(unit);
-    
-    // 执行攻击
-    await executeAction(unit, target, skill);
-    
-    // 检查战斗结果
-    if (checkBattleEnd()) break;
-  }
+  // 2. 获取前排敌人（index最小的一组）
+  const frontRow = getFrontRow(aliveEnemies);
   
-  // 3. 回合结束，更新冷却
-  updateAllCooldowns();
+  // 3. 前排中按优先级选择
+  // 3.1 优先：对位（相同index）
+  const samePosition = frontRow.find(e => e.index === attacker.index);
+  if (samePosition) return samePosition;
   
-  // 4. 准备下一回合
-  scheduleNextRound();
+  // 3.2 其次：同排距离最近
+  const nearest = frontRow.sort((a, b) => 
+    Math.abs(a.index - attacker.index) - Math.abs(b.index - attacker.index)
+  )[0];
+  if (nearest) return nearest;
+  
+  // 3.3 最后：随机
+  return frontRow[Math.floor(Math.random() * frontRow.length)];
+}
+
+function getFrontRow(units: Unit[]): Unit[] {
+  // 找到最小的index
+  const minIndex = Math.min(...units.map(u => u.index));
+  // 返回所有该index的单位
+  return units.filter(u => u.index === minIndex);
 }
 ```
 
-### 6.2 速度计算
+### 6.3 阵列与对位示意
+
+```
+英雄方（左侧）              敌方（右侧）
+index: 0  1  2  3  4       0  1  2  3  4
+       ↓                 ↓
+      [🧙]    ←──对位──→    [👺]
+         [🧝]  ←──对位──→  [👹]
+            [🧛]        [👻]
+
+对位规则：
+- 英雄[0] 优先攻击 敌人[0]
+- 英雄[1] 优先攻击 敌人[1]
+- 如果对位没有敌人，找最近的（敌人[0]）
+- 如果前排死光，进入下一排
+```
+
+### 6.4 回合执行流程（异步动画版）
 
 ```typescript
-function sortBySpeed(units: Unit[]): Unit[] {
-  return units.sort((a, b) => {
-    // 1. 速度比较
-    if (a.speed !== b.speed) {
-      return b.speed - a.speed; // 速度高的先
+async function executeRound() {
+  // 1. 回合开始技能
+  await triggerSkillsForAll('on_round_start');
+  
+  // 2. 确定行动顺序
+  const actionOrder = sortBySpeed([...heroUnits, ...enemyUnits]);
+  
+  // 3. 依次执行（等待动画完成）
+  for (const unit of actionOrder) {
+    if (unit.hp <= 0) continue;
+    
+    // 行动前技能
+    await triggerSkills(unit, 'on_action_start');
+    
+    // 选择目标
+    const enemies = unit.isEnemy ? heroUnits : enemyUnits;
+    const target = selectTarget(unit, enemies);
+    
+    if (target) {
+      // 执行攻击（包含动画等待）
+      await executeAttack(unit, target);
     }
     
-    // 2. 等级比较
-    if (a.level !== b.level) {
-      return b.level - a.level; // 等级高的先
-    }
+    // 行动后技能
+    await triggerSkills(unit, 'on_action_end');
     
-    // 3. 随机
-    return Math.random() - 0.5;
-  });
+    // 检查战斗结束
+    if (checkBattleEnd()) return;
+  }
+  
+  // 4. 回合结束技能
+  await triggerSkillsForAll('on_round_end');
+  
+  // 5. 更新冷却
+  updateAllCooldowns();
+  
+  // 6. 自动进入下一回合
+  await delay(200); // 短暂停顿
+  executeRound();   // 递归调用
+}
+
+async function executeAttack(attacker: Unit, target: Unit) {
+  // 尝试使用技能
+  const skill = await tryTriggerAttackSkill(attacker);
+  
+  if (skill) {
+    await executeSkill(attacker, target, skill);
+  } else {
+    await executeBasicAttack(attacker, target);
+  }
+}
+
+async function executeBasicAttack(attacker: Unit, target: Unit) {
+  const damage = calculateDamage(attacker, target);
+  
+  // 播放攻击动画（等待完成）
+  if (attacker.attackType === 'melee') {
+    await playMeleeAttack(attacker, target);
+  } else {
+    await playRangedAttack(attacker, target);
+  }
+  
+  // 在命中时机显示伤害数字
+  await showDamageNumber(target, damage);
+  
+  // 实际扣血
+  await applyDamage(target, damage, attacker);
+}
+```
+
+### 6.5 动画时间配置
+
+```typescript
+const ANIMATION_TIMING = {
+  // 近战攻击
+  melee: {
+    jumpTo: 150,      // 跳到目标前
+    attack: 100,      // 攻击动作
+    jumpBack: 150,    // 跳回原位
+    total: 400
+  },
+  
+  // 远程攻击
+  ranged: {
+    windup: 100,      // 前摇
+    projectile: 'dynamic',  // 投射物飞行（根据距离计算）
+    impact: 150,      // 命中特效
+    total: 'variable'
+  },
+  
+  // 技能（可配置）
+  skill: {
+    short: 500,
+    medium: 800,
+    long: 1200
+  },
+  
+  // 伤害数字
+  damageNumber: 600,   // 飘字时长
+  
+  // 死亡动画
+  death: 400,
+  
+  // 回合间隔
+  roundGap: 200
+};
+
+// 计算投射物飞行时间
+function calculateProjectileTime(from: Position, to: Position, speed: number): number {
+  const distance = Math.sqrt(
+    Math.pow(to.x - from.x, 2) + Math.pow(to.y - from.y, 2)
+  );
+  return distance / speed * 1000; // 转为毫秒
 }
 ```
 
