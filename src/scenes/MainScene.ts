@@ -171,17 +171,25 @@ export default class MainScene extends Phaser.Scene {
   }
 
   startAdventure() {
+    console.log('=== startAdventure called ===');
+    
     // 隐藏 UI
     this.uiOverlay.classList.remove('active');
     
     const run = DataManager.getCurrentRun();
+    console.log('Current run:', run);
+    
+    // 先停止当前场景的输入处理
+    this.input.enabled = false;
     
     if (run && run.status === 'ongoing') {
+      console.log('Starting BattleScene with continue=true');
       this.scene.start('BattleScene', { continue: true });
     } else {
       if (run) {
         DataManager.clearRunData();
       }
+      console.log('Starting BattleScene with continue=false');
       this.scene.start('BattleScene', { continue: false });
     }
   }
