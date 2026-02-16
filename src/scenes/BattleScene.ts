@@ -368,6 +368,22 @@ export default class BattleScene extends Phaser.Scene {
   // ==================== 战斗流程 ====================
 
   async startBattle() {
+    console.log('=== startBattle 开始 === currentStage:', this.currentStage);
+    
+    // 重置战斗状态
+    this.isBattleEnded = false;
+    
+    // 清理旧敌人
+    this.enemyUnits.forEach(enemy => {
+      if (enemy.container) {
+        enemy.container.destroy();
+      }
+    });
+    this.enemyUnits = [];
+    
+    // 创建新敌人
+    this.createEnemyUnits();
+    
     this.addLog('⚔️ 战斗开始！', '#ffd700');
     
     // 初始化技能
