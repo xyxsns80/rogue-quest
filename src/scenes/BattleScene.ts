@@ -52,6 +52,10 @@ const ANIM = {
   roundGap: 200
 };
 
+// ==================== 关卡配置 ====================
+
+const STAGES_PER_CHAPTER = 16;  // 每个大关卡有16个小关卡
+
 // ==================== BattleScene ====================
 
 export default class BattleScene extends Phaser.Scene {
@@ -61,15 +65,16 @@ export default class BattleScene extends Phaser.Scene {
   private skills: Skill[] = [];
   
   // 战斗状态
-  private currentLevel: number = 1;
+  private currentChapter: number = 1;  // 当前大关卡
+  private currentStage: number = 1;    // 当前小关卡 (1-16)
   private gold: number = 0;
   private exp: number = 0;
   private isAutoMode: boolean = true;
   private isPaused: boolean = false;
   private isBattleEnded: boolean = false;
   private battleLog: string[] = [];
-  private levelGold: number = 0;  // 当前关卡获得的金币
-  private levelExp: number = 0;   // 当前关卡获得的经验
+  private stageGold: number = 0;  // 当前小关卡获得的金币
+  private stageExp: number = 0;   // 当前小关卡获得的经验
   
   // UI 元素
   private battleLevelEl!: HTMLElement;
@@ -100,11 +105,12 @@ export default class BattleScene extends Phaser.Scene {
     this.heroUnits = [];
     this.enemyUnits = [];
     this.skills = [];
-    this.currentLevel = 1;
+    this.currentChapter = 1;
+    this.currentStage = 1;
     this.gold = 0;
     this.exp = 0;
-    this.levelGold = 0;
-    this.levelExp = 0;
+    this.stageGold = 0;
+    this.stageExp = 0;
     this.isAutoMode = true;
     this.isPaused = false;
     this.isBattleEnded = false;
@@ -114,7 +120,7 @@ export default class BattleScene extends Phaser.Scene {
     if (data.continue) {
       const run = DataManager.getCurrentRun();
       if (run) {
-        this.currentLevel = run.currentLevel;
+        this.currentStage = run.currentLevel;  // currentLevel 存的是小关卡
         this.gold = run.gold;
         this.exp = run.exp;
         this.skills = run.skills || [];
@@ -181,7 +187,7 @@ export default class BattleScene extends Phaser.Scene {
     const totalHp = this.heroUnits.reduce((sum, u) => sum + u.hp, 0);
     const totalMaxHp = this.heroUnits.reduce((sum, u) => sum + u.maxHp, 0);
     
-    this.battleLevelEl.textContent = `第 ${this.currentLevel} 关`;
+    this.battleLevelEl.textContent = `第 ${this.currentChapter}-${this.currentStage} 关 (${this.currentStage}/${STAGES_PER_CHAPTER})`;
     const hpPercent = totalMaxHp > 0 ? Math.max(0, (totalHp / totalMaxHp) * 100) : 0;
     this.battleHpFillEl.style.width = `${hpPercent}%`;
     this.battleHpTextEl.textContent = `HP: ${Math.floor(totalHp)}/${totalMaxHp}`;
@@ -252,9 +258,10 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   createEnemyUnits() {
-    const count = Math.min(1 + Math.floor(this.currentLevel / 2), 5);
-    const baseHp = 50 + this.currentLevel * 15;
-    const baseAttack = 5 + this.currentLevel * 3;
+    // 根据大关卡和小关卡计算难度
+    const count = Math.min(1 + Math.floor(this.currentChapter / 3), 5);
+    const baseHp = 50 + this.currentChapter * 30 + this.currentStage * 5;
+    const baseAttack = 5 + this.currentChapter * 3 + this.currentStage;
     
     const sprites = ['👺', '👹', '👻', '💀', '🧟'];
     
@@ -264,12 +271,12 @@ export default class BattleScene extends Phaser.Scene {
         name: `敌人${i + 1}`,
         isEnemy: true,
         index: i,
-        level: this.currentLevel,
+        level: this.currentChapter,
         hp: baseHp,
         maxHp: baseHp,
         attack: baseAttack,
         defense: 2,
-        speed: 8 + Math.floor(this.currentLevel / 2),
+        speed: 8 + Math.floor(this.currentChapter / 2),
         critRate: 0.05,
         critDamage: 1.5,
         sprite: sprites[i % sprites.length]
@@ -585,12 +592,12 @@ export default class BattleScene extends Phaser.Scene {
       
       // 奖励（仅敌人死亡时）
       if (target.isEnemy) {
-        const goldReward = 10 + this.currentLevel * 5;
-        const expReward = 5 + this.currentLevel * 3;
+        const goldReward = 10 + this.currentChapter * 5 + this.currentStage;
+        const expReward = 5 + this.currentChapter * 3 + this.currentStage;
         this.gold += goldReward;
         this.exp += expReward;
-        this.levelGold += goldReward;  // 记录当前关卡奖励
-        this.levelExp += expReward;
+        this.stageGold += goldReward;  // 记录当前小关卡奖励
+        this.stageExp += expReward;
         this.addLog(`💀 +${goldReward}💰 +${expReward}⚡`, '#ffd700');
         this.checkLevelUp();
       }
@@ -655,23 +662,23 @@ export default class BattleScene extends Phaser.Scene {
   async battleVictory() {
     this.isBattleEnded = true;
     
-    if (this.currentLevel >= 3) {
-      // 通关
+    if (this.currentStage >= STAGES_PER_CHAPTER) {
+      // 大关卡通过！
       await this.delay(500);
-      this.showResult('🎉 通关成功！', true);
+      this.showChapterComplete();
     } else {
-      // 关卡通过，显示肉鸽选择
-      this.showLevelComplete();
+      // 小关卡通过，显示肉鸽选择
+      this.showStageComplete();
     }
   }
 
-  showLevelComplete() {
+  showStageComplete() {
     this.isPaused = true;
     
     // 更新显示
-    this.levelCompleteText.textContent = `第 ${this.currentLevel} 关完成`;
-    this.levelGoldEl.textContent = this.levelGold.toString();
-    this.levelExpEl.textContent = this.levelExp.toString();
+    this.levelCompleteText.textContent = `第 ${this.currentChapter}-${this.currentStage} 关完成 (${this.currentStage}/${STAGES_PER_CHAPTER})`;
+    this.levelGoldEl.textContent = this.stageGold.toString();
+    this.levelExpEl.textContent = this.stageExp.toString();
     
     // 生成技能选项
     const skills = this.generateLevelRewardOptions();
@@ -761,20 +768,36 @@ export default class BattleScene extends Phaser.Scene {
       this.addLog('🔥 技能强化！', '#ff9800');
     }
     
-    // 保存进度并进入下一关
-    this.currentLevel++;
-    this.levelGold = 0;
-    this.levelExp = 0;
+    // 保存进度并进入下一小关卡
+    this.currentStage++;
+    this.stageGold = 0;
+    this.stageExp = 0;
     
     this.saveRun('ongoing');
     this.updateBattleUI();
     
-    this.addLog(`➡️ 进入第 ${this.currentLevel} 关`, '#667eea');
+    this.addLog(`➡️ 进入第 ${this.currentChapter}-${this.currentStage} 关`, '#667eea');
     
     // 重新开始场景
     this.time.delayedCall(500, () => {
       this.scene.restart({ continue: true });
     });
+  }
+
+  showChapterComplete() {
+    // 大关卡通过！
+    const user = DataManager.getCurrentUser();
+    if (user) {
+      user.gold += this.gold;
+      user.statistics.totalRuns++;
+      user.statistics.bestLevel = Math.max(user.statistics.bestLevel, this.currentChapter);
+      DataManager.updateUserData(user);
+    }
+    
+    // 清除冒险数据，准备下一大关卡
+    DataManager.clearRunData();
+    
+    this.showResult(`🎉 第 ${this.currentChapter} 大关卡通关！`, true);
   }
 
   battleDefeat() {
@@ -937,7 +960,7 @@ export default class BattleScene extends Phaser.Scene {
       runId: `run_${Date.now()}`,
       heroId: 'warrior',
       heroLevel: user.level,
-      currentLevel: this.currentLevel,
+      currentLevel: this.currentStage,  // 存储小关卡
       currentHp: Math.floor(totalHp),
       maxHp: totalMaxHp,
       skills: this.skills,
@@ -952,18 +975,16 @@ export default class BattleScene extends Phaser.Scene {
     if (status === 'completed' || status === 'failed') {
       user.gold += this.gold;
       user.statistics.totalRuns++;
-      if (this.currentLevel > user.statistics.bestLevel) {
-        user.statistics.bestLevel = this.currentLevel;
-      }
       DataManager.updateUserData(user);
       DataManager.clearRunData();
     } else {
+      // 保存当前大关卡和小关卡
       DataManager.saveRunData(run);
     }
   }
 
   returnToMain(_isVictory?: boolean) {
-    // 中途退出不保存当前关卡进度
+    // 中途退出保存进度
     // 只保存已获得的技能和属性加成
     const user = DataManager.getCurrentUser();
     if (user && !_isVictory) {
@@ -972,7 +993,7 @@ export default class BattleScene extends Phaser.Scene {
         runId: `run_${Date.now()}`,
         heroId: 'warrior',
         heroLevel: user.level,
-        currentLevel: this.currentLevel, // 保持当前关卡，下次重新打
+        currentLevel: this.currentStage, // 保持当前小关卡，下次重新打
         currentHp: this.heroUnits.reduce((sum, u) => sum + u.maxHp, 0), // 恢复满血
         maxHp: this.heroUnits.reduce((sum, u) => sum + u.maxHp, 0),
         skills: this.skills,
@@ -984,7 +1005,7 @@ export default class BattleScene extends Phaser.Scene {
         levelsCompleted: []
       };
       DataManager.saveRunData(run);
-      console.log('中途退出，保存进度，下次从第', this.currentLevel, '关重新开始');
+      console.log('中途退出，保存进度，下次从第', this.currentChapter, '-', this.currentStage, '关重新开始');
     }
     
     this.hideUI('battle-ui');

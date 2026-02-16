@@ -1,15 +1,98 @@
-# 战斗系统设计文档 v2.0
+# 战斗系统设计文档 v2.1
 
 ## 1. 概述
 
 ### 1.1 设计目标
-- **节奏：** 3-5分钟/局，中快节奏
+- **节奏：** 3-5分钟/小关卡，16小关卡=1大关卡
 - **操作：** 可自动可手动，轻松挂机
-- **乐趣：** 肉鸽元素带来的策略选择
+- **乐趣：** 每小关肉鸽选择，累积强化
 
 ### 1.2 核心循环
 ```
-进入战斗 → 回合制战斗 → 击杀敌人 → 获得经验 → 升级 → 选择技能 → 继续战斗 → 通关/失败 → 结算
+点击开始冒险 → 进入当前大关卡的第1小关
+  ↓
+战斗 → 击杀敌人 → 小关卡通过
+  ↓
+肉鸽选择（每小关1次）
+  ↓
+进入下一小关（2/16）... 直到16关
+  ↓
+16小关全通 → 大关卡通过
+  ↓
+下次冒险 → 下一个大关卡
+```
+
+---
+
+## 2. 关卡结构
+
+### 2.1 大关卡与小关卡
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    关卡层级结构                          │
+└─────────────────────────────────────────────────────────┘
+
+大关卡 (Chapter)
+  │
+  ├── 小关卡 1  → 战斗 → 肉鸽选择
+  ├── 小关卡 2  → 战斗 → 肉鸽选择
+  ├── 小关卡 3  → 战斗 → 肉鸽选择
+  │   ...
+  ├── 小关卡 15 → 战斗 → 肉鸽选择
+  └── 小关卡 16 → 战斗 → 肉鸽选择 → 大关卡通过！
+```
+
+### 2.2 数据结构
+
+```typescript
+interface GameProgress {
+  // 大关卡进度
+  currentChapter: number;      // 当前大关卡（1, 2, 3...）
+  currentStage: number;        // 当前小关卡（1-16）
+  maxChapter: number;          // 已通过的最高大关卡
+  
+  // 小关卡内状态
+  stageGold: number;           // 当前小关卡获得的金币
+  stageExp: number;            // 当前小关卡获得的经验
+  
+  // 肉鸽强化（本大关卡内有效）
+  skills: Skill[];             // 获得的技能
+  bonuses: StatBonus[];        // 属性加成
+  
+  // 结算后保存
+  totalGold: number;           // 总金币
+  accountLevel: number;        // 账号等级
+}
+
+interface StatBonus {
+  stat: 'attack' | 'hp' | 'speed' | 'critRate' | 'defense';
+  value: number;               // 加成值（百分比或固定）
+  type: 'percent' | 'flat';
+}
+```
+
+### 2.3 难度递增
+
+```typescript
+// 大关卡难度
+function getChapterDifficulty(chapter: number) {
+  return {
+    enemyBaseHp: 50 + chapter * 30,      // 每+1大关，敌人血量+30
+    enemyBaseAttack: 5 + chapter * 3,    // 每+1大关，敌人攻击+3
+    enemyCount: Math.min(1 + Math.floor(chapter / 3), 5),  // 敌人数量
+  };
+}
+
+// 小关卡难度（同一大关卡内递增）
+function getStageDifficulty(chapter: number, stage: number) {
+  const base = getChapterDifficulty(chapter);
+  return {
+    enemyBaseHp: base.enemyBaseHp + stage * 5,    // 每+1小关，血量+5
+    enemyBaseAttack: base.enemyBaseAttack + stage, // 每+1小关，攻击+1
+    enemyCount: base.enemyCount,
+  };
+}
 ```
 
 ---
