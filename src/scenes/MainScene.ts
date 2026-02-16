@@ -101,49 +101,57 @@ export default class MainScene extends Phaser.Scene {
   }
 
   bindEvents() {
-    // 开始冒险按钮
-    this.adventureBtn.addEventListener('click', () => this.startAdventure());
-    this.adventureBtn.addEventListener('touchend', (e) => {
+    // 开始冒险按钮 - 使用 touchstart 更灵敏
+    const handleAdventureClick = (e: Event) => {
       e.preventDefault();
+      e.stopPropagation();
+      console.log('Adventure button clicked/touched');
       this.startAdventure();
-    });
+    };
+    
+    this.adventureBtn.addEventListener('click', handleAdventureClick);
+    this.adventureBtn.addEventListener('touchstart', handleAdventureClick, { passive: false });
 
     // 功能按钮
     document.querySelectorAll('.func-btn').forEach(btn => {
-      btn.addEventListener('click', () => this.showMessage('功能开发中...'));
-      btn.addEventListener('touchend', (e) => {
+      const handleFuncClick = (e: Event) => {
         e.preventDefault();
         this.showMessage('功能开发中...');
-      });
+      };
+      btn.addEventListener('click', handleFuncClick);
+      btn.addEventListener('touchstart', handleFuncClick, { passive: false });
     });
 
     // 领取按钮
     const collectBtn = document.getElementById('collect-btn');
     if (collectBtn) {
-      collectBtn.addEventListener('click', () => this.collectIdleRewards());
-      collectBtn.addEventListener('touchend', (e) => {
+      const handleCollect = (e: Event) => {
         e.preventDefault();
         this.collectIdleRewards();
-      });
+      };
+      collectBtn.addEventListener('click', handleCollect);
+      collectBtn.addEventListener('touchstart', handleCollect, { passive: false });
     }
 
     // 加速按钮
     const speedBtn = document.getElementById('speed-btn');
     if (speedBtn) {
-      speedBtn.addEventListener('click', () => this.showMessage('观看广告获得2小时收益'));
-      speedBtn.addEventListener('touchend', (e) => {
+      const handleSpeed = (e: Event) => {
         e.preventDefault();
         this.showMessage('观看广告获得2小时收益');
-      });
+      };
+      speedBtn.addEventListener('click', handleSpeed);
+      speedBtn.addEventListener('touchstart', handleSpeed, { passive: false });
     }
 
     // 底部导航
     document.querySelectorAll('.nav-item').forEach(item => {
-      item.addEventListener('click', () => this.showMessage('功能开发中...'));
-      item.addEventListener('touchend', (e) => {
+      const handleNavClick = (e: Event) => {
         e.preventDefault();
         this.showMessage('功能开发中...');
-      });
+      };
+      item.addEventListener('click', handleNavClick);
+      item.addEventListener('touchstart', handleNavClick, { passive: false });
     });
   }
 
