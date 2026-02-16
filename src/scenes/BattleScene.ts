@@ -499,11 +499,14 @@ export default class BattleScene extends Phaser.Scene {
     if (!attacker.container || !target.container) return;
     
     const originalX = attacker.container.x;
+    const originalY = attacker.container.y;
     const targetX = target.container.x - 50;
+    const targetY = target.container.y;  // 保持与目标同一水平线
     
     // 跳到目标前
     await this.tweenPromise(attacker.container, {
       x: targetX,
+      y: targetY,
       duration: ANIM.melee.jumpTo,
       ease: 'Quad.easeOut'
     });
@@ -520,9 +523,10 @@ export default class BattleScene extends Phaser.Scene {
       repeat: 3
     });
     
-    // 跳回
+    // 跳回原位
     await this.tweenPromise(attacker.container, {
       x: originalX,
+      y: originalY,
       duration: ANIM.melee.jumpBack,
       ease: 'Quad.easeIn'
     });
