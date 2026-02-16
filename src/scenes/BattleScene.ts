@@ -35,6 +35,12 @@ export default class BattleScene extends Phaser.Scene {
   private battleLogEl!: HTMLElement;
   private battleModeEl!: HTMLElement;
   private battleBackBtn!: HTMLElement;
+  
+  // 技能选择 UI
+  private skillSelectOverlay!: HTMLElement;
+  private skillOptionsEl!: HTMLElement;
+  private skillSelectLevelEl!: HTMLElement;
+  private isPaused: boolean = false;
 
   constructor() {
     super({ key: 'BattleScene' });
@@ -113,6 +119,11 @@ export default class BattleScene extends Phaser.Scene {
     this.battleLogEl = document.getElementById('battle-log-text')!;
     this.battleModeEl = document.getElementById('battle-mode')!;
     this.battleBackBtn = document.getElementById('battle-back')!;
+    
+    // 技能选择 UI
+    this.skillSelectOverlay = document.getElementById('skill-select-overlay')!;
+    this.skillOptionsEl = document.getElementById('skill-options')!;
+    this.skillSelectLevelEl = document.getElementById('skill-select-level')!;
   }
 
   updateBattleUI() {
@@ -220,6 +231,8 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   battleTick() {
+    // 暂停时不执行
+    if (this.isPaused) return;
     if (this.heroHp <= 0 || this.enemies.length === 0) return;
 
     // 自动攻击
@@ -392,84 +405,125 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   showSkillSelection() {
+    const user = DataManager.getCurrentUser();
+    const level = user ? user.level : 1;
+    
     // 暂停战斗
+    this.isPaused = true;
     this.time.paused = true;
 
-    const width = this.cameras.main.width;
-    const height = this.cameras.main.height;
-
-    // 创建遮罩
-    const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.7);
+    // 更新等级显示
+    this.skillSelectLevelEl.textContent = `达到等级 ${level}`;
     
-    // 标题
-    const title = this.add.text(width / 2, 150, '选择技能升级', {
-      fontSize: '24px',
-      color: '#ffd700'
-    }).setOrigin(0.5);
-
-    // 随机3个技能选项
-    const availableSkills = [
-      { id: 'fireball2', name: '火球术+1', icon: '🔥', desc: '伤害+20%' },
-      { id: 'critical2', name: '暴击+1', icon: '💥', desc: '暴击率+5%' },
-      { id: 'heal', name: '治疗', icon: '💚', desc: '回复30%HP' }
-    ];
-
-    const buttons: Phaser.GameObjects.Rectangle[] = [];
-    const texts: Phaser.GameObjects.Text[] = [];
-
-    availableSkills.forEach((skill, i) => {
-      const y = 250 + i * 80;
+    // 生成随机技能选项
+    const availableSkills = this.generateSkillOptions();
+    
+    // 清空并生成选项
+    this.skillOptionsEl.innerHTML = '';
+    
+    availableSkills.forEach(skill => {
+      const option = document.createElement('div');
+      option.className = 'skill-option';
+      option.innerHTML = `
+        <div class="skill-option-icon">${skill.icon}</div>
+        <div class="skill-option-info">
+          <div class="skill-option-name">${skill.name}</div>
+          <div class="skill-option-desc">${skill.desc}</div>
+        </div>
+        <div class="skill-option-rarity ${skill.rarity}">${skill.rarityText}</div>
+      `;
       
-      const btn = this.add.rectangle(width / 2, y, width - 40, 60, 0x667eea, 0.8);
-      btn.setStrokeStyle(2, 0x667eea);
-      
-      const iconText = this.add.text(width / 2 - 100, y, skill.icon, { fontSize: '32px' }).setOrigin(0.5);
-      const nameText = this.add.text(width / 2, y - 10, skill.name, {
-        fontSize: '16px',
-        color: '#ffffff'
-      }).setOrigin(0.5);
-      const descText = this.add.text(width / 2, y + 15, skill.desc, {
-        fontSize: '12px',
-        color: '#888888'
-      }).setOrigin(0.5);
-
-      buttons.push(btn);
-      texts.push(iconText, nameText, descText);
-
-      btn.setInteractive({ useHandCursor: true });
-      btn.on('pointerdown', () => {
+      // 触摸事件
+      let isTouched = false;
+      option.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        isTouched = true;
         this.selectSkill(skill);
-        
-        // 清理所有元素
-        overlay.destroy();
-        title.destroy();
-        buttons.forEach(b => b.destroy());
-        texts.forEach(t => t.destroy());
-        
-        this.time.paused = false;
+      }, { passive: false });
+      
+      option.addEventListener('click', (e) => {
+        if (!isTouched) {
+          e.preventDefault();
+          this.selectSkill(skill);
+        }
+        isTouched = false;
       });
+      
+      this.skillOptionsEl.appendChild(option);
     });
+    
+    // 显示弹窗
+    this.skillSelectOverlay.classList.add('active');
+  }
+
+  generateSkillOptions() {
+    const allSkills = [
+      { id: 'fireball2', name: '火球术强化', icon: '🔥', desc: '火球术伤害+20%', rarity: 'common', rarityText: '普通' },
+      { id: 'critical2', name: '暴击精通', icon: '💥', desc: '暴击率+5%', rarity: 'rare', rarityText: '稀有' },
+      { id: 'heal', name: '生命回复', icon: '💚', desc: '立即恢复30%HP', rarity: 'common', rarityText: '普通' },
+      { id: 'attack', name: '力量提升', icon: '⚔️', desc: '基础攻击+10%', rarity: 'common', rarityText: '普通' },
+      { id: 'defense', name: '铁壁', icon: '🛡️', desc: '受到伤害-10%', rarity: 'rare', rarityText: '稀有' },
+      { id: 'speed', name: '急速', icon: '⚡', desc: '攻击速度+15%', rarity: 'rare', rarityText: '稀有' },
+      { id: 'lifesteal', name: '生命偷取', icon: '🩸', desc: '攻击回复5%HP', rarity: 'epic', rarityText: '史诗' },
+      { id: 'doublehit', name: '连击', icon: '🎯', desc: '10%几率攻击两次', rarity: 'epic', rarityText: '史诗' },
+      { id: 'rage', name: '狂暴', icon: '😤', desc: 'HP<30%时伤害+50%', rarity: 'legendary', rarityText: '传说' },
+    ];
+    
+    // 随机选3个不重复的
+    const shuffled = [...allSkills].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, 3);
   }
 
   selectSkill(skill: any) {
-    if (skill.id === 'heal') {
-      this.heroHp = Math.min(this.heroMaxHp, this.heroHp + this.heroMaxHp * 0.3);
-      this.addLog('💚 恢复 30% HP！', '#4CAF50');
-    } else if (skill.id === 'fireball2') {
-      const fireball = this.skills.find(s => s.id === 'fireball');
-      if (fireball && fireball.damage) {
-        fireball.damage += 0.2;
-        this.addLog('🔥 火球术伤害提升！', '#ff9800');
-      }
-    } else if (skill.id === 'critical2') {
-      const crit = this.skills.find(s => s.id === 'critical');
-      if (crit && crit.chance) {
-        crit.chance += 0.05;
-        this.addLog('💥 暴击率提升！', '#ffd700');
-      }
+    // 隐藏弹窗
+    this.skillSelectOverlay.classList.remove('active');
+    
+    // 应用效果
+    switch (skill.id) {
+      case 'heal':
+        this.heroHp = Math.min(this.heroMaxHp, this.heroHp + this.heroMaxHp * 0.3);
+        this.addLog('💚 恢复 30% HP！', '#4CAF50');
+        break;
+      case 'fireball2':
+        const fireball = this.skills.find(s => s.id === 'fireball');
+        if (fireball && fireball.damage) {
+          fireball.damage += 0.2;
+          this.addLog('🔥 火球术伤害提升！', '#ff9800');
+        }
+        break;
+      case 'critical2':
+        const crit = this.skills.find(s => s.id === 'critical');
+        if (crit && crit.chance) {
+          crit.chance += 0.05;
+          this.addLog('💥 暴击率提升！', '#ffd700');
+        }
+        break;
+      case 'attack':
+        // 可以添加基础攻击力属性
+        this.addLog('⚔️ 基础攻击提升！', '#ff9800');
+        break;
+      case 'defense':
+        this.addLog('🛡️ 防御提升！', '#4a90d9');
+        break;
+      case 'speed':
+        this.addLog('⚡ 攻击速度提升！', '#ffd700');
+        break;
+      case 'lifesteal':
+        this.addLog('🩸 获得生命偷取！', '#a335ee');
+        break;
+      case 'doublehit':
+        this.addLog('🎯 获得连击！', '#a335ee');
+        break;
+      case 'rage':
+        this.addLog('😤 获得狂暴！', '#ff8000');
+        break;
     }
     
     this.updateBattleUI();
+    
+    // 恢复战斗
+    this.isPaused = false;
+    this.time.paused = false;
   }
 
   checkBattleResult() {

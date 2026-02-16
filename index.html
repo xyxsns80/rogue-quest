@@ -570,6 +570,116 @@
       color: var(--green);
       font-size: 12px;
     }
+    
+    /* ========== 技能选择弹窗 ========== */
+    #skill-select-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 100;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: rgba(0, 0, 0, 0.8);
+      pointer-events: auto;
+    }
+    
+    #skill-select-overlay.active {
+      display: flex;
+    }
+    
+    .skill-select-title {
+      color: var(--gold);
+      font-size: clamp(20px, 6vw, 28px);
+      font-weight: bold;
+      margin-bottom: var(--spacing-xl);
+      text-align: center;
+    }
+    
+    .skill-select-subtitle {
+      color: var(--text-secondary);
+      font-size: 14px;
+      margin-bottom: var(--spacing-lg);
+    }
+    
+    .skill-options {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-md);
+      width: min(90%, 320px);
+    }
+    
+    .skill-option {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+      padding: var(--spacing-md);
+      background: rgba(102, 126, 234, 0.2);
+      border: 2px solid var(--accent);
+      border-radius: var(--border-radius);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    
+    .skill-option:active {
+      background: rgba(102, 126, 234, 0.4);
+      transform: scale(0.98);
+    }
+    
+    .skill-option-icon {
+      font-size: 36px;
+      flex-shrink: 0;
+    }
+    
+    .skill-option-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-xs);
+    }
+    
+    .skill-option-name {
+      color: var(--text-primary);
+      font-size: 16px;
+      font-weight: 500;
+    }
+    
+    .skill-option-desc {
+      color: var(--text-secondary);
+      font-size: 12px;
+    }
+    
+    .skill-option-rarity {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      align-self: flex-start;
+    }
+    
+    .skill-option-rarity.common {
+      background: #666;
+      color: #fff;
+    }
+    
+    .skill-option-rarity.rare {
+      background: #4a90d9;
+      color: #fff;
+    }
+    
+    .skill-option-rarity.epic {
+      background: #a335ee;
+      color: #fff;
+    }
+    
+    .skill-option-rarity.legendary {
+      background: #ff8000;
+      color: #fff;
+    }
   </style>
 </head>
 <body>
@@ -680,6 +790,15 @@
         <button class="battle-back-btn" id="battle-back">🏠 返回</button>
         <div class="battle-mode" id="battle-mode">🤖 自动</div>
       </div>
+    </div>
+  </div>
+  
+  <!-- 技能选择弹窗 -->
+  <div id="skill-select-overlay">
+    <div class="skill-select-title">🎉 升级！选择奖励</div>
+    <div class="skill-select-subtitle" id="skill-select-level">达到等级 2</div>
+    <div class="skill-options" id="skill-options">
+      <!-- 动态生成技能选项 -->
     </div>
   </div>
   
