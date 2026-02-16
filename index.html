@@ -680,6 +680,47 @@
       background: #ff8000;
       color: #fff;
     }
+    
+    /* ========== 关卡结束界面 ========== */
+    #level-complete-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 100;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: rgba(0, 0, 0, 0.85);
+      pointer-events: auto;
+    }
+    
+    #level-complete-overlay.active {
+      display: flex;
+    }
+    
+    .level-rewards {
+      background: rgba(255, 255, 255, 0.1);
+      padding: var(--spacing-md) var(--spacing-xl);
+      border-radius: 8px;
+      margin: var(--spacing-md) 0;
+      text-align: center;
+    }
+    
+    .reward-summary {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-xs);
+      color: var(--text-primary);
+      font-size: 14px;
+    }
+    
+    .reward-summary span {
+      color: var(--gold);
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
@@ -799,6 +840,22 @@
     <div class="skill-select-subtitle" id="skill-select-level">达到等级 2</div>
     <div class="skill-options" id="skill-options">
       <!-- 动态生成技能选项 -->
+    </div>
+  </div>
+  
+  <!-- 关卡结束肉鸽选择 -->
+  <div id="level-complete-overlay">
+    <div class="skill-select-title">🏆 关卡通过！</div>
+    <div class="skill-select-subtitle" id="level-complete-text">第 1 关完成</div>
+    <div class="level-rewards" id="level-rewards">
+      <div class="reward-summary">
+        <div>💰 获得: <span id="level-gold">0</span></div>
+        <div>⚡ 经验: <span id="level-exp">0</span></div>
+      </div>
+    </div>
+    <div class="skill-select-title" style="font-size: 18px; margin-top: 16px;">选择奖励</div>
+    <div class="skill-options" id="level-skill-options">
+      <!-- 动态生成 -->
     </div>
   </div>
   

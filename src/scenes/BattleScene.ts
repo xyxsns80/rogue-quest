@@ -68,6 +68,8 @@ export default class BattleScene extends Phaser.Scene {
   private isPaused: boolean = false;
   private isBattleEnded: boolean = false;
   private battleLog: string[] = [];
+  private levelGold: number = 0;  // 当前关卡获得的金币
+  private levelExp: number = 0;   // 当前关卡获得的经验
   
   // UI 元素
   private battleLevelEl!: HTMLElement;
@@ -81,6 +83,11 @@ export default class BattleScene extends Phaser.Scene {
   private skillSelectOverlay!: HTMLElement;
   private skillOptionsEl!: HTMLElement;
   private skillSelectLevelEl!: HTMLElement;
+  private levelCompleteOverlay!: HTMLElement;
+  private levelCompleteText!: HTMLElement;
+  private levelGoldEl!: HTMLElement;
+  private levelExpEl!: HTMLElement;
+  private levelSkillOptionsEl!: HTMLElement;
 
   constructor() {
     super({ key: 'BattleScene' });
@@ -96,6 +103,8 @@ export default class BattleScene extends Phaser.Scene {
     this.currentLevel = 1;
     this.gold = 0;
     this.exp = 0;
+    this.levelGold = 0;
+    this.levelExp = 0;
     this.isAutoMode = true;
     this.isPaused = false;
     this.isBattleEnded = false;
@@ -160,6 +169,11 @@ export default class BattleScene extends Phaser.Scene {
     this.skillSelectOverlay = document.getElementById('skill-select-overlay')!;
     this.skillOptionsEl = document.getElementById('skill-options')!;
     this.skillSelectLevelEl = document.getElementById('skill-select-level')!;
+    this.levelCompleteOverlay = document.getElementById('level-complete-overlay')!;
+    this.levelCompleteText = document.getElementById('level-complete-text')!;
+    this.levelGoldEl = document.getElementById('level-gold')!;
+    this.levelExpEl = document.getElementById('level-exp')!;
+    this.levelSkillOptionsEl = document.getElementById('level-skill-options')!;
   }
 
   updateBattleUI() {
@@ -575,6 +589,8 @@ export default class BattleScene extends Phaser.Scene {
         const expReward = 5 + this.currentLevel * 3;
         this.gold += goldReward;
         this.exp += expReward;
+        this.levelGold += goldReward;  // 记录当前关卡奖励
+        this.levelExp += expReward;
         this.addLog(`💀 +${goldReward}💰 +${expReward}⚡`, '#ffd700');
         this.checkLevelUp();
       }
@@ -638,17 +654,127 @@ export default class BattleScene extends Phaser.Scene {
 
   async battleVictory() {
     this.isBattleEnded = true;
-    this.currentLevel++;
     
-    if (this.currentLevel > 3) {
+    if (this.currentLevel >= 3) {
+      // 通关
       await this.delay(500);
       this.showResult('🎉 通关成功！', true);
     } else {
-      this.addLog(`✅ 第${this.currentLevel - 1}关通过！`, '#4CAF50');
-      this.saveRun('ongoing');
-      await this.delay(1000);
-      this.scene.restart({ continue: true });
+      // 关卡通过，显示肉鸽选择
+      this.showLevelComplete();
     }
+  }
+
+  showLevelComplete() {
+    this.isPaused = true;
+    
+    // 更新显示
+    this.levelCompleteText.textContent = `第 ${this.currentLevel} 关完成`;
+    this.levelGoldEl.textContent = this.levelGold.toString();
+    this.levelExpEl.textContent = this.levelExp.toString();
+    
+    // 生成技能选项
+    const skills = this.generateLevelRewardOptions();
+    this.levelSkillOptionsEl.innerHTML = '';
+    
+    skills.forEach(skill => {
+      const option = document.createElement('div');
+      option.className = 'skill-option';
+      option.innerHTML = `
+        <div class="skill-option-icon">${skill.icon}</div>
+        <div class="skill-option-info">
+          <div class="skill-option-name">${skill.name}</div>
+          <div class="skill-option-desc">${skill.desc}</div>
+        </div>
+        <div class="skill-option-rarity ${skill.rarity}">${skill.rarityText}</div>
+      `;
+      
+      let isTouched = false;
+      option.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        isTouched = true;
+        this.selectLevelReward(skill);
+      }, { passive: false });
+      option.addEventListener('click', (e) => {
+        if (!isTouched) {
+          e.preventDefault();
+          this.selectLevelReward(skill);
+        }
+        isTouched = false;
+      });
+      
+      this.levelSkillOptionsEl.appendChild(option);
+    });
+    
+    this.levelCompleteOverlay.classList.add('active');
+  }
+
+  generateLevelRewardOptions() {
+    const allRewards = [
+      { id: 'heal_full', name: '完全恢复', icon: '💚', desc: 'HP恢复至满', rarity: 'common', rarityText: '普通', healFull: true },
+      { id: 'attack_up', name: '力量提升', icon: '⚔️', desc: '攻击+15%', rarity: 'common', rarityText: '普通', attackBonus: 0.15 },
+      { id: 'hp_up', name: '生命强化', icon: '❤️', desc: '最大HP+20%', rarity: 'common', rarityText: '普通', hpBonus: 0.2 },
+      { id: 'speed_up', name: '急速', icon: '⚡', desc: '速度+20%', rarity: 'rare', rarityText: '稀有', speedBonus: 0.2 },
+      { id: 'crit_up', name: '暴击精通', icon: '💥', desc: '暴击率+10%', rarity: 'rare', rarityText: '稀有', critBonus: 0.1 },
+      { id: 'fireball_enhance', name: '火球术强化', icon: '🔥', desc: '火球伤害+30%', rarity: 'rare', rarityText: '稀有', skillBonus: { skillId: 'fireball', damageAdd: 0.3 } },
+      { id: 'lifesteal', name: '生命偷取', icon: '🩸', desc: '攻击回复5%HP', rarity: 'epic', rarityText: '史诗', lifesteal: 0.05 },
+      { id: 'double_attack', name: '连击', icon: '🎯', desc: '15%几率攻击两次', rarity: 'epic', rarityText: '史诗', doubleChance: 0.15 },
+      { id: 'rage', name: '狂暴', icon: '😤', desc: 'HP<30%时伤害+50%', rarity: 'legendary', rarityText: '传说', rage: true },
+    ];
+    
+    const shuffled = [...allRewards].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, 3);
+  }
+
+  selectLevelReward(reward: any) {
+    this.levelCompleteOverlay.classList.remove('active');
+    
+    // 应用奖励
+    if (reward.healFull) {
+      this.heroUnits.forEach(h => h.hp = h.maxHp);
+      this.addLog('💚 HP完全恢复！', '#4CAF50');
+    }
+    if (reward.attackBonus) {
+      this.heroUnits.forEach(h => h.attack *= (1 + reward.attackBonus));
+      this.addLog('⚔️ 攻击力提升！', '#ff9800');
+    }
+    if (reward.hpBonus) {
+      this.heroUnits.forEach(h => {
+        h.maxHp = Math.floor(h.maxHp * (1 + reward.hpBonus));
+        h.hp = h.maxHp;
+      });
+      this.addLog('❤️ 最大HP提升！', '#ff4444');
+    }
+    if (reward.speedBonus) {
+      this.heroUnits.forEach(h => h.speed *= (1 + reward.speedBonus));
+      this.addLog('⚡ 速度提升！', '#ffd700');
+    }
+    if (reward.critBonus) {
+      this.heroUnits.forEach(h => h.critRate += reward.critBonus);
+      this.addLog('💥 暴击率提升！', '#ff9800');
+    }
+    if (reward.skillBonus) {
+      const skill = this.skills.find(s => s.id === reward.skillBonus.skillId);
+      if (skill && skill.damageMultiplier) {
+        skill.damageMultiplier += reward.skillBonus.damageAdd;
+      }
+      this.addLog('🔥 技能强化！', '#ff9800');
+    }
+    
+    // 保存进度并进入下一关
+    this.currentLevel++;
+    this.levelGold = 0;
+    this.levelExp = 0;
+    
+    this.saveRun('ongoing');
+    this.updateBattleUI();
+    
+    this.addLog(`➡️ 进入第 ${this.currentLevel} 关`, '#667eea');
+    
+    // 重新开始场景
+    this.time.delayedCall(500, () => {
+      this.scene.restart({ continue: true });
+    });
   }
 
   battleDefeat() {
@@ -837,6 +963,30 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   returnToMain(_isVictory?: boolean) {
+    // 中途退出不保存当前关卡进度
+    // 只保存已获得的技能和属性加成
+    const user = DataManager.getCurrentUser();
+    if (user && !_isVictory) {
+      // 保存技能（肉鸽获得的强化）
+      const run: RunData = {
+        runId: `run_${Date.now()}`,
+        heroId: 'warrior',
+        heroLevel: user.level,
+        currentLevel: this.currentLevel, // 保持当前关卡，下次重新打
+        currentHp: this.heroUnits.reduce((sum, u) => sum + u.maxHp, 0), // 恢复满血
+        maxHp: this.heroUnits.reduce((sum, u) => sum + u.maxHp, 0),
+        skills: this.skills,
+        equipment: [],
+        gold: this.gold,
+        exp: this.exp,
+        startTime: Date.now(),
+        status: 'ongoing',
+        levelsCompleted: []
+      };
+      DataManager.saveRunData(run);
+      console.log('中途退出，保存进度，下次从第', this.currentLevel, '关重新开始');
+    }
+    
     this.hideUI('battle-ui');
     this.scene.start('MainScene');
   }
