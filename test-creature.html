@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>生物系统测试</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; }
+    .test-case { margin: 10px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; }
+    .pass { background: #e8f5e9; border-color: #4caf50; }
+    .fail { background: #ffebee; border-color: #f44336; }
+    h2 { margin: 0 0 10px 0; }
+    .detail { font-size: 14px; color: #666; margin-top: 8px; }
+    button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+    #log { background: #f5f5f5; padding: 10px; margin-top: 20px; font-family: monospace; font-size: 12px; max-height: 300px; overflow-y: auto; }
+  </style>
+</head>
+<body>
+  <h1>🧪 生物系统测试</h1>
+  
+  <div id="tests"></div>
+  
+  <div>
+    <button onclick="runAllTests()">运行所有测试</button>
+    <button onclick="clearLog()">清空日志</button>
+  </div>
+  
+  <div id="log"></div>
+  
+  <script type="module">
+    import { CREATURES, getCreatureById, RACE_NAMES, SYNERGY_LEVELS } from './src/data/Creatures.ts';
+    import { CreatureManager } from './src/utils/CreatureManager.ts';
+    import { DataManager } from './src/utils/DataManager.ts';
+    
+    // 初始化
+    DataManager.init();
+    
+    window.clearLog = () => {
+      document.getElementById('log').innerHTML = '';
+    };
+    
+    function log(msg, type = 'info') {
+      const logEl = document.getElementById('log');
+      const color = type === 'error' ? 'red' : type === 'success' ? 'green' : 'black';
+      logEl.innerHTML += `<div style="color:${color}">${new Date().toLocaleTimeString()}: ${msg}</div>`;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+    
+    function createTest(name, testFn) {
+      return { name, testFn };
+    }
+    
+    async function runTest(test) {
+      const testsEl = document.getElementById('tests');
+      const div = document.createElement('div');
+      div.className = 'test-case';
+      div.innerHTML = `<h2>${test.name}</h2><div class="status">运行中...</div>`;
+      testsEl.appendChild(div);
+      
+      try {
+        const result = await test.testFn();
+        div.classList.add(result.pass ? 'pass' : 'fail');
+        div.querySelector('.status').innerHTML = result.pass ? '✅ 通过' : '❌ 失败';
+        if (result.detail) {
+          div.innerHTML += `<div class="detail">${result.detail}</div>`;
+        }
+        log(`${test.name}: ${result.pass ? 'PASS' : 'FAIL'}`, result.pass ? 'success' : 'error');
+      } catch (e) {
+        div.classList.add('fail');
+        div.querySelector('.status').innerHTML = '❌ 错误';
+        div.innerHTML += `<div class="detail" style="color:red">${e.message}</div>`;
+        log(`${test.name}: ERROR - ${e.message}`, 'error');
+      }
+    }
+    
+    const tests = [
+      createTest('1. 生物数据加载', () => {
+        const count = CREATURES.length;
+        return {
+          pass: count === 35,
+          detail: `生物数量: ${count} (期望: 35)`
+        };
+      }),
+      
+      createTest('2. 生物查询', () => {
+        const pikeman = getCreatureById('pikeman');
+        return {
+          pass: pikeman && pikeman.name === '枪兵',
+          detail: pikeman ? `找到: ${pikeman.name}` : '未找到枪兵'
+        };
+      }),
+      
+      createTest('3. CreatureManager 初始化', () => {
+        const cm = new CreatureManager();
+        return {
+          pass: true,
+          detail: `队伍上限: ${cm.getTeamSize()}, 当前数量: ${cm.getTeam().length}`
+        };
+      }),
+      
+      createTest('4. 添加新生物', () => {
+        const cm = new CreatureManager();
+        cm.clear();  // 清空队伍
+        const result = cm.addCreature('pikeman');
+        return {
+          pass: result.success && cm.getTeam().length === 1,
+          detail: `结果: ${result.message}, 队伍数量: ${cm.getTeam().length}`
+        };
+      }),
+      
+      createTest('5. 生物升星', () => {
+        const cm = new CreatureManager();
+        cm.clear();
+        cm.addCreature('pikeman');  // 添加1星
+        const result = cm.addCreature('pikeman');  // 再次添加应该升星
+        return {
+          pass: result.success && result.upgraded && result.newStar === 2,
+          detail: `结果: ${result.message}, 新星级: ${result.newStar}`
+        };
+      }),
+      
+      createTest('6. 满星生物不再出现', () => {
+        const cm = new CreatureManager();
+        cm.clear();
+        cm.addCreature('pikeman');
+        cm.addCreature('pikeman');
+        cm.addCreature('pikeman');  // 3星满级
+        const available = cm.getAvailableCreatures();
+        const hasPikeman = available.some(c => c.id === 'pikeman');
+        return {
+          pass: !hasPikeman,
+          detail: `可用生物池是否包含枪兵: ${hasPikeman}`
+        };
+      }),
+      
+      createTest('7. 生成肉鸽选项', () => {
+        const cm = new CreatureManager();
+        cm.clear();
+        const choices = cm.generateChoices();
+        return {
+          pass: choices.length >= 1 && choices.length <= 3,
+          detail: `生成选项数量: ${choices.length}, 类型: ${choices.map(c => c.type).join(', ')}`
+        };
+      }),
+      
+      createTest('8. 羁绊计算', () => {
+        const cm = new CreatureManager();
+        cm.clear();
+        cm.addCreature('pikeman');   // 城堡
+        cm.addCreature('archer');    // 城堡
+        const synergies = cm.calculateSynergies();
+        const castleSynergy = synergies.find(s => s.race === 'castle');
+        return {
+          pass: castleSynergy && castleSynergy.level >= 1,
+          detail: castleSynergy ? `城堡羁绊: 等级${castleSynergy.level}, 数量${castleSynergy.count}` : '无羁绊'
+        };
+      }),
+      
+      createTest('9. 属性计算', () => {
+        const cm = new CreatureManager();
+        cm.clear();
+        cm.addCreature('pikeman');
+        const creature = cm.getTeam()[0];
+        const stats = cm.getCreatureStats(creature);
+        return {
+          pass: stats && stats.hp > 0 && stats.attack > 0,
+          detail: stats ? `HP: ${stats.hp}, ATK: ${stats.attack}, DEF: ${stats.defense}` : '无法计算属性'
+        };
+      }),
+      
+      createTest('10. 队伍满后无法添加', () => {
+        const cm = new CreatureManager();
+        cm.clear();
+        // 添加5个不同生物
+        cm.addCreature('pikeman');
+        cm.addCreature('archer');
+        cm.addCreature('griffin');
+        cm.addCreature('swordsman');
+        cm.addCreature('monk');
+        const result = cm.addCreature('knight');  // 第6个应该失败
+        return {
+          pass: !result.success && result.message === '队伍已满',
+          detail: `结果: ${result.message}`
+        };
+      })
+    ];
+    
+    window.runAllTests = async () => {
+      document.getElementById('tests').innerHTML = '';
+      log('=== 开始测试 ===');
+      for (const test of tests) {
+        await runTest(test);
+      }
+      log('=== 测试完成 ===');
+    };
+    
+    // 页面加载后自动运行
+    window.runAllTests();
+  </script>
+</body>
+</html>

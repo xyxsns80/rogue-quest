@@ -39,25 +39,30 @@ export class CreatureManager {
   
   // 添加新生物
   addCreature(creatureId: string): { success: boolean; message: string; upgraded?: boolean; newStar?: number } {
+    console.log('CreatureManager.addCreature called with:', creatureId);
     const def = getCreatureById(creatureId);
     if (!def) {
+      console.error('Creature not found:', creatureId);
       return { success: false, message: '生物不存在' };
     }
     
     // 检查是否已有该生物
     const existing = this.creatures.find(c => c.creatureId === creatureId);
+    console.log('Existing creature:', existing, 'Current team:', this.creatures.length, '/', this.teamSize);
     
     if (existing) {
       // 已有该生物，尝试升星
       if (existing.star >= 3) {
         return { success: false, message: '该生物已满星，无法继续获得' };
       }
-      existing.star++;
+      existing.star = (existing.star + 1) as 1 | 2 | 3;
+      console.log('Upgraded to star:', existing.star);
       return { success: true, message: `${def.name} 升星成功！`, upgraded: true, newStar: existing.star };
     }
     
     // 新生物
     if (this.isTeamFull()) {
+      console.log('Team is full!');
       return { success: false, message: '队伍已满' };
     }
     
@@ -66,6 +71,7 @@ export class CreatureManager {
       star: 1,
       currentHp: def.baseHp,
     });
+    console.log('Added new creature, team size now:', this.creatures.length);
     
     return { success: true, message: `获得 ${def.name}！` };
   }

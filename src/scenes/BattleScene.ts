@@ -67,7 +67,7 @@ export default class BattleScene extends Phaser.Scene {
   private skills: Skill[] = [];
   
   // 生物系统
-  private creatureManager: CreatureManager;
+  private creatureManager!: CreatureManager;
   
   // 战斗状态
   private currentChapter: number = 1;  // 当前大关卡
@@ -101,7 +101,13 @@ export default class BattleScene extends Phaser.Scene {
 
   constructor() {
     super({ key: 'BattleScene' });
-    this.creatureManager = new CreatureManager();
+  }
+  
+  private getCreatureManager(): CreatureManager {
+    if (!this.creatureManager) {
+      this.creatureManager = new CreatureManager();
+    }
+    return this.creatureManager;
   }
 
   init(data: { continue: boolean }) {
@@ -775,7 +781,9 @@ export default class BattleScene extends Phaser.Scene {
     const options: any[] = [];
     
     // 1-2个生物选项
-    const creatureChoices = this.creatureManager.generateChoices();
+    const creatureChoices = this.getCreatureManager().generateChoices();
+    console.log('生成生物选项:', creatureChoices.length, creatureChoices);
+    
     if (creatureChoices.length > 0) {
       const creatureCount = Math.random() < 0.7 ? 2 : 1;  // 70%概率2个生物选项
       for (let i = 0; i < Math.min(creatureCount, creatureChoices.length); i++) {
@@ -810,19 +818,23 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   selectMixedReward(option: any) {
+    console.log('=== selectMixedReward ===', option);
     this.levelCompleteOverlay.classList.remove('active');
     
     if (option.type === 'creature') {
       // 选择生物
+      console.log('选择生物:', option.creature.id, option.creature.name);
       const result = this.creatureManager.addCreature(option.creature.id);
+      console.log('添加结果:', result);
       if (result.success) {
         this.addLog(`🎉 ${result.message}`, '#4CAF50');
-        this.creatureManager.saveToRun();
+        this.getCreatureManager().saveToRun();
       } else {
         this.addLog(`❌ ${result.message}`, '#ff4444');
       }
     } else {
       // 选择奖励（应用原有逻辑）
+      console.log('选择奖励:', option.id);
       this.applyReward(option);
     }
     
@@ -835,12 +847,16 @@ export default class BattleScene extends Phaser.Scene {
     this.updateBattleUI();
     
     this.addLog(`➡️ 进入第 ${this.currentChapter}-${this.currentStage} 关`, '#667eea');
+    console.log('准备开始下一场战斗, currentStage:', this.currentStage, 'STAGES_PER_CHAPTER:', STAGES_PER_CHAPTER);
     this.isPaused = false;
     
     if (this.currentStage <= STAGES_PER_CHAPTER) {
+      console.log('调用 startBattle()');
       this.delay(500).then(() => {
         this.startBattle();
       });
+    } else {
+      console.log('已超过最大关卡数，不调用 startBattle()');
     }
   }
   
