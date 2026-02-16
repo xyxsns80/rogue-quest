@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { DataManager } from '../utils/DataManager';
 import type { RunData } from '../utils/DataManager';
 import { CreatureManager } from '../utils/CreatureManager';
-import { RACE_NAMES } from '../data/Creatures';
+import { RACE_NAMES, getCreatureById } from '../data/Creatures';
 
 // ==================== 类型定义 ====================
 
@@ -256,19 +256,17 @@ export default class BattleScene extends Phaser.Scene {
   createHeroUnits() {
     const user = DataManager.getCurrentUser();
     const level = user?.level || 1;
-    const baseHp = 100 + level * 10;
-    const baseAttack = 10 + level * 2;
     
-    // 创建一个英雄单位
+    // 创建英雄单位
     const hero: Unit = {
-      id: 'hero_0',
+      id: 'hero',
       name: '英雄',
       isEnemy: false,
       index: 0,
       level: level,
-      hp: baseHp,
-      maxHp: baseHp,
-      attack: baseAttack,
+      hp: 100 + level * 10,
+      maxHp: 100 + level * 10,
+      attack: 10 + level * 2,
       defense: 5,
       speed: 10,
       critRate: 0.1,
@@ -278,6 +276,58 @@ export default class BattleScene extends Phaser.Scene {
     
     this.heroUnits.push(hero);
     this.createUnitSprite(hero, 80, this.cameras.main.height / 2);
+    
+    // 添加生物单位
+    this.createCreatureUnits();
+  }
+  
+  createCreatureUnits() {
+    const cm = this.getCreatureManager();
+    const creatures = cm.getTeam();
+    const synergies = cm.calculateSynergies();
+    
+    console.log('创建生物单位，数量:', creatures.length, '羁绊:', synergies.map(s => `${s.race}(${s.level})`).join(', '));
+    
+    const centerY = this.cameras.main.height / 2;
+    const startX = 120;  // 第一个生物的x位置
+    const spacing = 60;  // 生物之间的间距
+    
+    creatures.forEach((creature, index) => {
+      const stats = cm.getCreatureStats(creature);
+      if (!stats) {
+        console.warn('无法获取生物属性:', creature.creatureId);
+        return;
+      }
+      
+      const def = getCreatureById(creature.creatureId);
+      if (!def) return;
+      
+      const unit: Unit = {
+        id: `creature_${index}`,
+        name: def.name,
+        isEnemy: false,
+        index: index + 1,  // 0是英雄，1+是生物
+        level: def.tier,
+        hp: stats.hp,
+        maxHp: stats.hp,
+        attack: stats.attack,
+        defense: stats.defense,
+        speed: stats.speed,
+        critRate: 0.05 + (creature.star * 0.02),  // 星级增加暴击
+        critDamage: 1.5 + (creature.star * 0.2),  // 星级增加暴击伤害
+        sprite: def.icon
+      };
+      
+      // 计算Y位置（英雄在中间，生物分布在上下）
+      const yOffset = (index % 2 === 0 ? -1 : 1) * Math.floor((index + 1) / 2) * 70;
+      const y = centerY + yOffset;
+      const x = startX + Math.floor(index / 2) * spacing;
+      
+      this.heroUnits.push(unit);
+      this.createUnitSprite(unit, x, y);
+      
+      console.log(`创建生物: ${def.name} ★${creature.star} HP:${stats.hp} ATK:${stats.attack}`);
+    });
   }
 
   createEnemyUnits() {
@@ -370,13 +420,19 @@ export default class BattleScene extends Phaser.Scene {
   async startBattle() {
     console.log('=== startBattle 开始 ===');
     console.log('当前状态: currentStage=', this.currentStage, 'isBattleEnded=', this.isBattleEnded, 'isPaused=', this.isPaused);
-    console.log('英雄数量:', this.heroUnits.length, '敌人数量:', this.enemyUnits.length);
     
     // 完全重置战斗状态
     this.isBattleEnded = false;
     this.isPaused = false;
     
-    // 清理旧敌人
+    // 清理所有旧单位
+    this.heroUnits.forEach(unit => {
+      if (unit.container) {
+        unit.container.destroy();
+      }
+    });
+    this.heroUnits = [];
+    
     this.enemyUnits.forEach(enemy => {
       if (enemy.container) {
         enemy.container.destroy();
@@ -384,21 +440,18 @@ export default class BattleScene extends Phaser.Scene {
     });
     this.enemyUnits = [];
     
-    // 恢复英雄HP（每场战斗开始时恢复满血）
-    this.heroUnits.forEach(hero => {
-      hero.hp = hero.maxHp;
-      this.updateUnitHpBar(hero);
-    });
+    console.log('所有单位已清理');
     
-    console.log('敌人已清理，英雄HP已恢复');
+    // 创建英雄和生物单位
+    this.createHeroUnits();
     
-    // 创建新敌人
+    // 创建敌人
     this.createEnemyUnits();
     
-    console.log('敌人创建完成，数量:', this.enemyUnits.length);
-    console.log('英雄状态:', this.heroUnits.map(h => ({ name: h.name, hp: h.hp, maxHp: h.maxHp })));
+    console.log('单位创建完成 - 英雄:', this.heroUnits.length, '敌人:', this.enemyUnits.length);
+    console.log('英雄队伍:', this.heroUnits.map(h => `${h.name}(HP:${h.hp})`).join(', '));
     
-    this.addLog('⚔️ 战斗开始！', '#ffd700');
+    this.addLog(`⚔️ 战斗开始！队伍: ${this.heroUnits.length}人`, '#ffd700');
     this.updateBattleUI();
     
     // 初始化技能
