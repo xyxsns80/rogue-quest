@@ -370,8 +370,9 @@ export default class BattleScene extends Phaser.Scene {
   async startBattle() {
     console.log('=== startBattle 开始 === currentStage:', this.currentStage);
     
-    // 重置战斗状态
+    // 完全重置战斗状态
     this.isBattleEnded = false;
+    this.isPaused = false;
     
     // 清理旧敌人
     this.enemyUnits.forEach(enemy => {
@@ -381,8 +382,12 @@ export default class BattleScene extends Phaser.Scene {
     });
     this.enemyUnits = [];
     
+    console.log('敌人已清理，准备创建新敌人');
+    
     // 创建新敌人
     this.createEnemyUnits();
+    
+    console.log('敌人创建完成，数量:', this.enemyUnits.length);
     
     this.addLog('⚔️ 战斗开始！', '#ffd700');
     
@@ -399,7 +404,11 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   async executeRound() {
-    if (this.isBattleEnded || this.isPaused) return;
+    console.log('executeRound 检查: isBattleEnded=', this.isBattleEnded, 'isPaused=', this.isPaused);
+    if (this.isBattleEnded || this.isPaused) {
+      console.log('executeRound 提前返回');
+      return;
+    }
     
     // 检查战斗结束
     if (this.checkBattleEnd()) return;
@@ -688,6 +697,12 @@ export default class BattleScene extends Phaser.Scene {
   checkBattleEnd(): boolean {
     const heroAlive = this.heroUnits.some(u => u.hp > 0);
     const enemyAlive = this.enemyUnits.some(u => u.hp > 0);
+    
+    // 如果没有敌人，说明战斗还没开始或已经结束
+    if (this.enemyUnits.length === 0) {
+      console.log('checkBattleEnd: 敌人数量为0，跳过检查');
+      return false;
+    }
     
     if (!heroAlive) {
       this.battleDefeat();
