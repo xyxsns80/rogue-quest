@@ -824,7 +824,7 @@ export default class BattleScene extends Phaser.Scene {
     if (option.type === 'creature') {
       // 选择生物
       console.log('选择生物:', option.creature.id, option.creature.name);
-      const result = this.creatureManager.addCreature(option.creature.id);
+      const result = this.getCreatureManager().addCreature(option.creature.id);
       console.log('添加结果:', result);
       if (result.success) {
         this.addLog(`🎉 ${result.message}`, '#4CAF50');
