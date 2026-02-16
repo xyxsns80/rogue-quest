@@ -286,21 +286,33 @@ export default class BattleScene extends Phaser.Scene {
     const creatures = cm.getTeam();
     const synergies = cm.calculateSynergies();
     
-    console.log('创建生物单位，数量:', creatures.length, '羁绊:', synergies.map(s => `${s.race}(${s.level})`).join(', '));
+    console.log('=== createCreatureUnits ===');
+    console.log('生物数量:', creatures.length, '/', cm.getTeamSize());
+    console.log('羁绊:', synergies.map(s => `${s.race}(${s.level})`).join(', '));
+    
+    if (creatures.length === 0) {
+      console.log('没有生物，跳过创建');
+      return;
+    }
     
     const centerY = this.cameras.main.height / 2;
     const startX = 120;  // 第一个生物的x位置
     const spacing = 60;  // 生物之间的间距
     
     creatures.forEach((creature, index) => {
+      console.log(`处理生物 ${index}:`, creature.creatureId, 'star:', creature.star);
+      
       const stats = cm.getCreatureStats(creature);
       if (!stats) {
-        console.warn('无法获取生物属性:', creature.creatureId);
+        console.error('无法获取生物属性:', creature.creatureId);
         return;
       }
       
       const def = getCreatureById(creature.creatureId);
-      if (!def) return;
+      if (!def) {
+        console.error('无法找到生物定义:', creature.creatureId);
+        return;
+      }
       
       const unit: Unit = {
         id: `creature_${index}`,
@@ -323,11 +335,13 @@ export default class BattleScene extends Phaser.Scene {
       const y = centerY + yOffset;
       const x = startX + Math.floor(index / 2) * spacing;
       
+      console.log(`创建生物单位: ${def.name} ★${creature.star} 位置(${x}, ${y}) HP:${stats.hp}`);
+      
       this.heroUnits.push(unit);
       this.createUnitSprite(unit, x, y);
-      
-      console.log(`创建生物: ${def.name} ★${creature.star} HP:${stats.hp} ATK:${stats.attack}`);
     });
+    
+    console.log('生物单位创建完成，总数:', this.heroUnits.length);
   }
 
   createEnemyUnits() {
