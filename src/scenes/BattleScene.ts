@@ -49,6 +49,17 @@ export default class BattleScene extends Phaser.Scene {
   init(data: { continue: boolean }) {
     console.log('=== BattleScene init ===', data);
     
+    // 每次都重置默认值
+    this.currentLevel = 1;
+    this.heroHp = 100;
+    this.heroMaxHp = 100;
+    this.gold = 0;
+    this.exp = 0;
+    this.skills = [];
+    this.enemies = [];
+    this.battleLog = [];
+    this.isPaused = false;
+    
     if (data.continue) {
       const run = DataManager.getCurrentRun();
       if (run) {
@@ -57,7 +68,7 @@ export default class BattleScene extends Phaser.Scene {
         this.heroMaxHp = run.maxHp;
         this.gold = run.gold;
         this.exp = run.exp;
-        this.skills = run.skills;
+        this.skills = run.skills || [];
       }
     }
   }
@@ -637,6 +648,17 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   shutdown() {
+    // 隐藏所有 UI
     this.hideUI('battle-ui');
+    
+    // 隐藏技能选择弹窗
+    if (this.skillSelectOverlay) {
+      this.skillSelectOverlay.classList.remove('active');
+    }
+    
+    // 暂停所有计时器
+    this.time.paused = true;
+    
+    console.log('=== BattleScene shutdown ===');
   }
 }
