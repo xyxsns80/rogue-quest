@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { DataManager } from '../utils/DataManager';
 import type { RunData } from '../utils/DataManager';
+import { CreatureManager } from '../utils/CreatureManager';
+import { RACE_NAMES } from '../data/Creatures';
 
 // ==================== 类型定义 ====================
 
@@ -64,6 +66,9 @@ export default class BattleScene extends Phaser.Scene {
   private enemyUnits: Unit[] = [];
   private skills: Skill[] = [];
   
+  // 生物系统
+  private creatureManager: CreatureManager;
+  
   // 战斗状态
   private currentChapter: number = 1;  // 当前大关卡
   private currentStage: number = 1;    // 当前小关卡 (1-16)
@@ -96,6 +101,7 @@ export default class BattleScene extends Phaser.Scene {
 
   constructor() {
     super({ key: 'BattleScene' });
+    this.creatureManager = new CreatureManager();
   }
 
   init(data: { continue: boolean }) {
@@ -695,62 +701,150 @@ export default class BattleScene extends Phaser.Scene {
     this.levelGoldEl.textContent = this.stageGold.toString();
     this.levelExpEl.textContent = this.stageExp.toString();
     
-    // 生成技能选项
-    const skills = this.generateLevelRewardOptions();
+    // 生成混合选项（奖励+生物）
+    const options = this.generateMixedRewardOptions();
     this.levelSkillOptionsEl.innerHTML = '';
     
-    skills.forEach(skill => {
-      const option = document.createElement('div');
-      option.className = 'skill-option';
-      option.innerHTML = `
-        <div class="skill-option-icon">${skill.icon}</div>
-        <div class="skill-option-info">
-          <div class="skill-option-name">${skill.name}</div>
-          <div class="skill-option-desc">${skill.desc}</div>
-        </div>
-        <div class="skill-option-rarity ${skill.rarity}">${skill.rarityText}</div>
-      `;
+    options.forEach((option: any) => {
+      const optionEl = document.createElement('div');
+      optionEl.className = 'skill-option';
+      
+      if (option.type === 'creature') {
+        // 生物选项
+        const creature = option.creature;
+        const raceName = RACE_NAMES[creature.race as keyof typeof RACE_NAMES] || creature.race;
+        const starText = option.isUpgrade 
+          ? `${'★'.repeat(option.fromStar)} → ${'★'.repeat(option.toStar)}`
+          : '★';
+        
+        optionEl.innerHTML = `
+          <div class="skill-option-icon">${creature.icon}</div>
+          <div class="skill-option-info">
+            <div class="skill-option-name">${creature.name} ${starText}</div>
+            <div class="skill-option-desc">${raceName} ${creature.tier}级 ${option.isUpgrade ? '升星' : '新生物'}</div>
+          </div>
+          <div class="skill-option-rarity ${this.getTierRarity(creature.tier)}">${this.getTierRarityText(creature.tier)}</div>
+        `;
+      } else {
+        // 技能/奖励选项
+        optionEl.innerHTML = `
+          <div class="skill-option-icon">${option.icon}</div>
+          <div class="skill-option-info">
+            <div class="skill-option-name">${option.name}</div>
+            <div class="skill-option-desc">${option.desc}</div>
+          </div>
+          <div class="skill-option-rarity ${option.rarity}">${option.rarityText}</div>
+        `;
+      }
       
       let isTouched = false;
-      option.addEventListener('touchstart', (e) => {
+      optionEl.addEventListener('touchstart', (e) => {
         e.preventDefault();
         isTouched = true;
-        this.selectLevelReward(skill);
+        this.selectMixedReward(option);
       }, { passive: false });
-      option.addEventListener('click', (e) => {
+      optionEl.addEventListener('click', (e) => {
         if (!isTouched) {
           e.preventDefault();
-          this.selectLevelReward(skill);
+          this.selectMixedReward(option);
         }
         isTouched = false;
       });
       
-      this.levelSkillOptionsEl.appendChild(option);
+      this.levelSkillOptionsEl.appendChild(optionEl);
     });
     
     this.levelCompleteOverlay.classList.add('active');
   }
+  
+  getTierRarity(tier: number): string {
+    if (tier >= 7) return 'legendary';
+    if (tier >= 6) return 'epic';
+    if (tier >= 4) return 'rare';
+    return 'common';
+  }
+  
+  getTierRarityText(tier: number): string {
+    if (tier >= 7) return '传说';
+    if (tier >= 6) return '史诗';
+    if (tier >= 4) return '稀有';
+    return '普通';
+  }
 
-  generateLevelRewardOptions() {
+  generateMixedRewardOptions() {
+    const options: any[] = [];
+    
+    // 1-2个生物选项
+    const creatureChoices = this.creatureManager.generateChoices();
+    if (creatureChoices.length > 0) {
+      const creatureCount = Math.random() < 0.7 ? 2 : 1;  // 70%概率2个生物选项
+      for (let i = 0; i < Math.min(creatureCount, creatureChoices.length); i++) {
+        const choice = creatureChoices[i];
+        options.push({
+          type: 'creature',
+          creature: choice.creature,
+          isUpgrade: choice.type === 'upgrade',
+          fromStar: choice.fromStar,
+          toStar: choice.toStar,
+        });
+      }
+    }
+    
+    // 剩余用技能/奖励填充
     const allRewards = [
       { id: 'heal_full', name: '完全恢复', icon: '💚', desc: 'HP恢复至满', rarity: 'common', rarityText: '普通', healFull: true },
       { id: 'attack_up', name: '力量提升', icon: '⚔️', desc: '攻击+15%', rarity: 'common', rarityText: '普通', attackBonus: 0.15 },
       { id: 'hp_up', name: '生命强化', icon: '❤️', desc: '最大HP+20%', rarity: 'common', rarityText: '普通', hpBonus: 0.2 },
       { id: 'speed_up', name: '急速', icon: '⚡', desc: '速度+20%', rarity: 'rare', rarityText: '稀有', speedBonus: 0.2 },
       { id: 'crit_up', name: '暴击精通', icon: '💥', desc: '暴击率+10%', rarity: 'rare', rarityText: '稀有', critBonus: 0.1 },
-      { id: 'fireball_enhance', name: '火球术强化', icon: '🔥', desc: '火球伤害+30%', rarity: 'rare', rarityText: '稀有', skillBonus: { skillId: 'fireball', damageAdd: 0.3 } },
       { id: 'lifesteal', name: '生命偷取', icon: '🩸', desc: '攻击回复5%HP', rarity: 'epic', rarityText: '史诗', lifesteal: 0.05 },
       { id: 'double_attack', name: '连击', icon: '🎯', desc: '15%几率攻击两次', rarity: 'epic', rarityText: '史诗', doubleChance: 0.15 },
-      { id: 'rage', name: '狂暴', icon: '😤', desc: 'HP<30%时伤害+50%', rarity: 'legendary', rarityText: '传说', rage: true },
     ];
     
     const shuffled = [...allRewards].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, 3);
+    while (options.length < 3 && shuffled.length > 0) {
+      options.push({ type: 'reward', ...shuffled.shift() });
+    }
+    
+    return options.slice(0, 3);
   }
 
-  selectLevelReward(reward: any) {
+  selectMixedReward(option: any) {
     this.levelCompleteOverlay.classList.remove('active');
     
+    if (option.type === 'creature') {
+      // 选择生物
+      const result = this.creatureManager.addCreature(option.creature.id);
+      if (result.success) {
+        this.addLog(`🎉 ${result.message}`, '#4CAF50');
+        this.creatureManager.saveToRun();
+      } else {
+        this.addLog(`❌ ${result.message}`, '#ff4444');
+      }
+    } else {
+      // 选择奖励（应用原有逻辑）
+      this.applyReward(option);
+    }
+    
+    // 保存进度并进入下一小关卡
+    this.currentStage++;
+    this.stageGold = 0;
+    this.stageExp = 0;
+    
+    this.saveRun('ongoing');
+    this.updateBattleUI();
+    
+    this.addLog(`➡️ 进入第 ${this.currentChapter}-${this.currentStage} 关`, '#667eea');
+    this.isPaused = false;
+    
+    if (this.currentStage <= STAGES_PER_CHAPTER) {
+      this.delay(500).then(() => {
+        this.startBattle();
+      });
+    }
+  }
+  
+  applyReward(reward: any) {
     // 应用奖励
     if (reward.healFull) {
       this.heroUnits.forEach(h => h.hp = h.maxHp);
@@ -782,21 +876,6 @@ export default class BattleScene extends Phaser.Scene {
       }
       this.addLog('🔥 技能强化！', '#ff9800');
     }
-    
-    // 保存进度并进入下一小关卡
-    this.currentStage++;
-    this.stageGold = 0;
-    this.stageExp = 0;
-    
-    this.saveRun('ongoing');
-    this.updateBattleUI();
-    
-    this.addLog(`➡️ 进入第 ${this.currentChapter}-${this.currentStage} 关`, '#667eea');
-    
-    // 重新开始场景
-    this.time.delayedCall(500, () => {
-      this.scene.restart({ continue: true });
-    });
   }
 
   showChapterComplete() {
