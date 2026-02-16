@@ -2,28 +2,71 @@ import Phaser from 'phaser';
 import { DataManager } from '../utils/DataManager';
 import type { RunData } from '../utils/DataManager';
 
+// ==================== 类型定义 ====================
+
+interface Unit {
+  id: string;
+  name: string;
+  isEnemy: boolean;
+  index: number;
+  level: number;
+  hp: number;
+  maxHp: number;
+  attack: number;
+  defense: number;
+  speed: number;
+  critRate: number;
+  critDamage: number;
+  sprite: string;
+  container?: Phaser.GameObjects.Container;
+  hpBar?: Phaser.GameObjects.Graphics;
+  hpText?: Phaser.GameObjects.Text;
+}
+
 interface Skill {
   id: string;
   name: string;
   icon: string;
-  type: 'active' | 'passive';
-  description: string;
-  cooldown?: number;
-  chance?: number;
-  damage?: number;
-  level: number;
+  desc: string;
+  rarity: string;
+  rarityText: string;
+  
+  // 触发
+  triggerChance: number;
+  cooldown: number;
+  currentCooldown: number;
+  
+  // 效果
+  damageMultiplier?: number;
+  healPercent?: number;
+  statBonus?: { stat: string; value: number };
 }
 
+// ==================== 动画时间配置 ====================
+
+const ANIM = {
+  melee: { jumpTo: 150, attack: 100, jumpBack: 150 },
+  ranged: { windup: 100, impact: 150 },
+  damageNumber: 600,
+  death: 400,
+  roundGap: 200
+};
+
+// ==================== BattleScene ====================
+
 export default class BattleScene extends Phaser.Scene {
-  private hero!: Phaser.GameObjects.Container;
-  private enemies: Phaser.GameObjects.Container[] = [];
+  // 单位
+  private heroUnits: Unit[] = [];
+  private enemyUnits: Unit[] = [];
   private skills: Skill[] = [];
+  
+  // 战斗状态
   private currentLevel: number = 1;
-  private heroHp: number = 100;
-  private heroMaxHp: number = 100;
   private gold: number = 0;
   private exp: number = 0;
   private isAutoMode: boolean = true;
+  private isPaused: boolean = false;
+  private isBattleEnded: boolean = false;
   private battleLog: string[] = [];
   
   // UI 元素
@@ -35,12 +78,9 @@ export default class BattleScene extends Phaser.Scene {
   private battleLogEl!: HTMLElement;
   private battleModeEl!: HTMLElement;
   private battleBackBtn!: HTMLElement;
-  
-  // 技能选择 UI
   private skillSelectOverlay!: HTMLElement;
   private skillOptionsEl!: HTMLElement;
   private skillSelectLevelEl!: HTMLElement;
-  private isPaused: boolean = false;
 
   constructor() {
     super({ key: 'BattleScene' });
@@ -49,23 +89,23 @@ export default class BattleScene extends Phaser.Scene {
   init(data: { continue: boolean }) {
     console.log('=== BattleScene init ===', data);
     
-    // 每次都重置默认值
+    // 完全重置所有状态
+    this.heroUnits = [];
+    this.enemyUnits = [];
+    this.skills = [];
     this.currentLevel = 1;
-    this.heroHp = 100;
-    this.heroMaxHp = 100;
     this.gold = 0;
     this.exp = 0;
-    this.skills = [];
-    this.enemies = [];
-    this.battleLog = [];
+    this.isAutoMode = true;
     this.isPaused = false;
+    this.isBattleEnded = false;
+    this.battleLog = [];
     
+    // 从存档恢复
     if (data.continue) {
       const run = DataManager.getCurrentRun();
       if (run) {
         this.currentLevel = run.currentLevel;
-        this.heroHp = run.currentHp;
-        this.heroMaxHp = run.maxHp;
         this.gold = run.gold;
         this.exp = run.exp;
         this.skills = run.skills || [];
@@ -78,47 +118,34 @@ export default class BattleScene extends Phaser.Scene {
     
     // 显示战斗 UI
     this.showUI('battle-ui');
-    
-    // 获取 UI 元素
     this.initUIElements();
-    
-    // 更新 UI 显示
     this.updateBattleUI();
-    
-    // 绑定事件
     this.bindEvents();
     
     // 绘制背景
     this.drawBackground();
     
-    // 创建战斗区域
-    this.createBattleArea();
-    
-    // 生成敌人
-    this.spawnEnemies();
+    // 创建单位
+    this.createHeroUnits();
+    this.createEnemyUnits();
     
     // 开始战斗
-    this.startBattle();
+    this.time.delayedCall(500, () => this.startBattle());
   }
 
+  // ==================== UI 管理 ====================
+
   showUI(uiId: string) {
-    // 隐藏所有 UI
     document.querySelectorAll('.ui-container').forEach(ui => {
       ui.classList.remove('active');
     });
-    
-    // 显示目标 UI
     const targetUI = document.getElementById(uiId);
-    if (targetUI) {
-      targetUI.classList.add('active');
-    }
+    if (targetUI) targetUI.classList.add('active');
   }
 
   hideUI(uiId: string) {
     const ui = document.getElementById(uiId);
-    if (ui) {
-      ui.classList.remove('active');
-    }
+    if (ui) ui.classList.remove('active');
   }
 
   initUIElements() {
@@ -130,32 +157,26 @@ export default class BattleScene extends Phaser.Scene {
     this.battleLogEl = document.getElementById('battle-log-text')!;
     this.battleModeEl = document.getElementById('battle-mode')!;
     this.battleBackBtn = document.getElementById('battle-back')!;
-    
-    // 技能选择 UI
     this.skillSelectOverlay = document.getElementById('skill-select-overlay')!;
     this.skillOptionsEl = document.getElementById('skill-options')!;
     this.skillSelectLevelEl = document.getElementById('skill-select-level')!;
   }
 
   updateBattleUI() {
-    // 关卡
+    // 获取英雄总血量
+    const totalHp = this.heroUnits.reduce((sum, u) => sum + u.hp, 0);
+    const totalMaxHp = this.heroUnits.reduce((sum, u) => sum + u.maxHp, 0);
+    
     this.battleLevelEl.textContent = `第 ${this.currentLevel} 关`;
-    
-    // 血条
-    const hpPercent = Math.max(0, (this.heroHp / this.heroMaxHp) * 100);
+    const hpPercent = totalMaxHp > 0 ? Math.max(0, (totalHp / totalMaxHp) * 100) : 0;
     this.battleHpFillEl.style.width = `${hpPercent}%`;
-    this.battleHpTextEl.textContent = `HP: ${Math.floor(this.heroHp)}/${this.heroMaxHp}`;
-    
-    // 金币/经验
+    this.battleHpTextEl.textContent = `HP: ${Math.floor(totalHp)}/${totalMaxHp}`;
     this.battleGoldEl.textContent = this.gold.toString();
     this.battleExpEl.textContent = this.exp.toString();
   }
 
   bindEvents() {
-    // 返回按钮
     this.addTapListener(this.battleBackBtn, () => this.returnToMain());
-    
-    // 自动/手动切换
     this.addTapListener(this.battleModeEl, () => {
       this.isAutoMode = !this.isAutoMode;
       this.battleModeEl.textContent = this.isAutoMode ? '🤖 自动' : '👆 手动';
@@ -165,13 +186,11 @@ export default class BattleScene extends Phaser.Scene {
 
   addTapListener(element: HTMLElement, callback: () => void) {
     let isTouched = false;
-    
     element.addEventListener('touchstart', (e) => {
       e.preventDefault();
       isTouched = true;
       callback();
     }, { passive: false });
-    
     element.addEventListener('click', (e) => {
       if (!isTouched) {
         e.preventDefault();
@@ -181,258 +200,540 @@ export default class BattleScene extends Phaser.Scene {
     });
   }
 
+  // ==================== 场景绘制 ====================
+
   drawBackground() {
     const graphics = this.add.graphics();
     graphics.fillGradientStyle(0x2d3436, 0x2d3436, 0x1a1a2e, 0x1a1a2e, 1);
     graphics.fillRect(0, 0, this.cameras.main.width, this.cameras.main.height);
   }
 
-  createBattleArea() {
-    const height = this.cameras.main.height;
-    
-    // 英雄 - 左侧
-    this.hero = this.add.container(100, height / 2);
-    const heroSprite = this.add.text(0, 0, '🧙', { fontSize: '48px' }).setOrigin(0.5);
-    this.hero.add(heroSprite);
+  // ==================== 单位创建 ====================
 
-    // 英雄动画
+  createHeroUnits() {
+    const user = DataManager.getCurrentUser();
+    const level = user?.level || 1;
+    const baseHp = 100 + level * 10;
+    const baseAttack = 10 + level * 2;
+    
+    // 创建一个英雄单位
+    const hero: Unit = {
+      id: 'hero_0',
+      name: '英雄',
+      isEnemy: false,
+      index: 0,
+      level: level,
+      hp: baseHp,
+      maxHp: baseHp,
+      attack: baseAttack,
+      defense: 5,
+      speed: 10,
+      critRate: 0.1,
+      critDamage: 2.0,
+      sprite: '🧙'
+    };
+    
+    this.heroUnits.push(hero);
+    this.createUnitSprite(hero, 80, this.cameras.main.height / 2);
+  }
+
+  createEnemyUnits() {
+    const count = Math.min(1 + Math.floor(this.currentLevel / 2), 5);
+    const baseHp = 50 + this.currentLevel * 15;
+    const baseAttack = 5 + this.currentLevel * 3;
+    
+    const sprites = ['👺', '👹', '👻', '💀', '🧟'];
+    
+    for (let i = 0; i < count; i++) {
+      const enemy: Unit = {
+        id: `enemy_${i}`,
+        name: `敌人${i + 1}`,
+        isEnemy: true,
+        index: i,
+        level: this.currentLevel,
+        hp: baseHp,
+        maxHp: baseHp,
+        attack: baseAttack,
+        defense: 2,
+        speed: 8 + Math.floor(this.currentLevel / 2),
+        critRate: 0.05,
+        critDamage: 1.5,
+        sprite: sprites[i % sprites.length]
+      };
+      
+      this.enemyUnits.push(enemy);
+      
+      const y = this.cameras.main.height / 2 - 60 + i * 70;
+      this.createUnitSprite(enemy, this.cameras.main.width - 80, y);
+    }
+  }
+
+  createUnitSprite(unit: Unit, x: number, y: number) {
+    // 创建容器
+    unit.container = this.add.container(x, y);
+    
+    // 单位精灵
+    const sprite = this.add.text(0, 0, unit.sprite, { fontSize: '40px' }).setOrigin(0.5);
+    unit.container.add(sprite);
+    
+    // 血条背景
+    const hpBarBg = this.add.graphics();
+    hpBarBg.fillStyle(0x333333, 0.8);
+    hpBarBg.fillRect(-30, -45, 60, 8);
+    unit.container.add(hpBarBg);
+    
+    // 血条
+    unit.hpBar = this.add.graphics();
+    unit.container.add(unit.hpBar);
+    
+    // 血量文字
+    unit.hpText = this.add.text(0, -55, `${unit.hp}`, {
+      fontSize: '10px',
+      color: '#ffffff'
+    }).setOrigin(0.5);
+    unit.container.add(unit.hpText);
+    
+    // 更新血条
+    this.updateUnitHpBar(unit);
+    
+    // 待机动画
     this.tweens.add({
-      targets: this.hero,
-      x: 120,
-      duration: 500,
+      targets: unit.container,
+      y: y - 5,
+      duration: 800,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut'
     });
   }
 
-  spawnEnemies() {
+  updateUnitHpBar(unit: Unit) {
+    if (!unit.hpBar) return;
+    
+    unit.hpBar.clear();
+    const percent = Math.max(0, unit.hp / unit.maxHp);
+    const color = percent > 0.3 ? 0x44ff44 : 0xff4444;
+    unit.hpBar.fillStyle(color, 1);
+    unit.hpBar.fillRect(-30, -45, 60 * percent, 8);
+    
+    if (unit.hpText) {
+      unit.hpText.setText(`${Math.floor(unit.hp)}`);
+    }
+  }
+
+  // ==================== 战斗流程 ====================
+
+  async startBattle() {
+    this.addLog('⚔️ 战斗开始！', '#ffd700');
+    
+    // 初始化技能
+    if (this.skills.length === 0) {
+      this.skills = [
+        { id: 'fireball', name: '火球术', icon: '🔥', desc: '150%伤害', rarity: 'common', rarityText: '普通', triggerChance: 0.8, cooldown: 3, currentCooldown: 0, damageMultiplier: 1.5 },
+        { id: 'critical', name: '暴击', icon: '💥', desc: '15%双倍伤害', rarity: 'rare', rarityText: '稀有', triggerChance: 0.15, cooldown: 0, currentCooldown: 0 }
+      ];
+    }
+    
+    // 开始回合循环
+    await this.executeRound();
+  }
+
+  async executeRound() {
+    if (this.isBattleEnded || this.isPaused) return;
+    
+    // 检查战斗结束
+    if (this.checkBattleEnd()) return;
+    
+    // 获取所有存活单位并按速度排序
+    const allUnits = [...this.heroUnits, ...this.enemyUnits].filter(u => u.hp > 0);
+    const actionOrder = this.sortBySpeed(allUnits);
+    
+    // 依次执行行动
+    for (const unit of actionOrder) {
+      if (unit.hp <= 0 || this.isBattleEnded || this.isPaused) continue;
+      
+      await this.executeUnitAction(unit);
+      
+      // 检查战斗结束
+      if (this.checkBattleEnd()) return;
+    }
+    
+    // 更新冷却
+    this.updateCooldowns();
+    
+    // 更新UI
+    this.updateBattleUI();
+    
+    // 短暂停顿后下一回合
+    await this.delay(ANIM.roundGap);
+    
+    // 递归执行下一回合
+    if (!this.isBattleEnded && !this.isPaused) {
+      await this.executeRound();
+    }
+  }
+
+  sortBySpeed(units: Unit[]): Unit[] {
+    return [...units].sort((a, b) => {
+      if (a.speed !== b.speed) return b.speed - a.speed;
+      if (a.level !== b.level) return b.level - a.level;
+      return Math.random() - 0.5;
+    });
+  }
+
+  async executeUnitAction(unit: Unit) {
+    // 选择目标
+    const enemies = unit.isEnemy ? this.heroUnits : this.enemyUnits;
+    const target = this.selectTarget(unit, enemies);
+    
+    if (!target) return;
+    
+    // 尝试使用技能
+    const skill = this.tryUseSkill(unit);
+    
+    if (skill && skill.damageMultiplier) {
+      await this.executeSkillAttack(unit, target, skill);
+    } else {
+      await this.executeBasicAttack(unit, target);
+    }
+  }
+
+  selectTarget(attacker: Unit, enemies: Unit[]): Unit | null {
+    const alive = enemies.filter(e => e.hp > 0);
+    if (alive.length === 0) return null;
+    
+    // 获取前排（index最小）
+    const minIndex = Math.min(...alive.map(e => e.index));
+    const frontRow = alive.filter(e => e.index === minIndex);
+    
+    // 优先对位
+    const samePos = frontRow.find(e => e.index === attacker.index);
+    if (samePos) return samePos;
+    
+    // 同排最近
+    const nearest = frontRow.sort((a, b) => 
+      Math.abs(a.index - attacker.index) - Math.abs(b.index - attacker.index)
+    )[0];
+    if (nearest) return nearest;
+    
+    // 随机
+    return frontRow[Math.floor(Math.random() * frontRow.length)];
+  }
+
+  tryUseSkill(_unit: Unit): Skill | null {
+    const available = this.skills.filter(s => 
+      s.currentCooldown === 0 && Math.random() < s.triggerChance
+    );
+    return available.length > 0 ? available[0] : null;
+  }
+
+  // ==================== 攻击动画 ====================
+
+  async executeBasicAttack(attacker: Unit, target: Unit) {
+    const damage = this.calculateDamage(attacker, target);
+    const isCrit = Math.random() < attacker.critRate;
+    const finalDamage = isCrit ? Math.floor(damage * attacker.critDamage) : damage;
+    
+    // 近战动画
+    await this.playMeleeAttack(attacker, target, finalDamage, isCrit);
+    
+    // 应用伤害
+    await this.applyDamage(target, finalDamage, attacker);
+  }
+
+  async executeSkillAttack(attacker: Unit, target: Unit, skill: Skill) {
+    const damage = this.calculateDamage(attacker, target) * (skill.damageMultiplier || 1);
+    const finalDamage = Math.floor(damage);
+    
+    this.addLog(`${skill.icon} ${skill.name}！`, '#ff9800');
+    
+    // 远程动画（火球）
+    await this.playRangedAttack(attacker, target, finalDamage, skill.icon);
+    
+    // 设置冷却
+    skill.currentCooldown = skill.cooldown;
+    
+    // 应用伤害
+    await this.applyDamage(target, finalDamage, attacker);
+  }
+
+  calculateDamage(attacker: Unit, target: Unit): number {
+    const baseDamage = attacker.attack;
+    const defense = target.defense;
+    return Math.max(1, Math.floor(baseDamage - defense * 0.5));
+  }
+
+  async playMeleeAttack(attacker: Unit, target: Unit, damage: number, isCrit: boolean) {
+    if (!attacker.container || !target.container) return;
+    
+    const originalX = attacker.container.x;
+    const targetX = target.container.x - 50;
+    
+    // 跳到目标前
+    await this.tweenPromise(attacker.container, {
+      x: targetX,
+      duration: ANIM.melee.jumpTo,
+      ease: 'Quad.easeOut'
+    });
+    
+    // 显示伤害数字
+    this.showDamageNumber(target, damage, isCrit);
+    
+    // 目标抖动
+    this.tweens.add({
+      targets: target.container,
+      x: target.container.x + 10,
+      duration: 50,
+      yoyo: true,
+      repeat: 3
+    });
+    
+    // 跳回
+    await this.tweenPromise(attacker.container, {
+      x: originalX,
+      duration: ANIM.melee.jumpBack,
+      ease: 'Quad.easeIn'
+    });
+  }
+
+  async playRangedAttack(attacker: Unit, target: Unit, damage: number, icon: string) {
+    if (!attacker.container || !target.container) return;
+    
+    // 前摇
+    await this.tweenPromise(attacker.container, {
+      scale: 1.1,
+      duration: ANIM.ranged.windup,
+      yoyo: true
+    });
+    
+    // 创建投射物
+    const projectile = this.add.text(
+      attacker.container.x,
+      attacker.container.y,
+      icon,
+      { fontSize: '24px' }
+    ).setOrigin(0.5);
+    
+    // 飞行
+    await this.tweenPromise(projectile, {
+      x: target.container.x,
+      y: target.container.y,
+      duration: 200,
+      ease: 'Linear'
+    });
+    
+    // 命中
+    this.showDamageNumber(target, damage, false);
+    projectile.destroy();
+    
+    // 目标闪烁
+    await this.tweenPromise(target.container, {
+      alpha: 0.5,
+      duration: 50,
+      yoyo: true,
+      repeat: 2
+    });
+  }
+
+  showDamageNumber(unit: Unit, damage: number, isCrit: boolean) {
+    if (!unit.container) return;
+    
+    const color = isCrit ? '#ff9800' : '#ffffff';
+    const size = isCrit ? '20px' : '16px';
+    
+    const text = this.add.text(
+      unit.container.x,
+      unit.container.y - 30,
+      `-${damage}`,
+      { fontSize: size, color, fontStyle: 'bold' }
+    ).setOrigin(0.5);
+    
+    // 飘字动画
+    this.tweens.add({
+      targets: text,
+      y: text.y - 40,
+      alpha: 0,
+      duration: ANIM.damageNumber,
+      ease: 'Quad.out',
+      onComplete: () => text.destroy()
+    });
+  }
+
+  async applyDamage(target: Unit, damage: number, attacker: Unit) {
+    target.hp = Math.max(0, target.hp - damage);
+    this.updateUnitHpBar(target);
+    
+    const critText = damage > attacker.attack * 1.5 ? '💥' : '';
+    this.addLog(`${attacker.name} → ${target.name} ${damage}${critText}`, attacker.isEnemy ? '#ff4444' : '#4CAF50');
+    
+    if (target.hp <= 0) {
+      await this.playDeath(target);
+      
+      // 奖励（仅敌人死亡时）
+      if (target.isEnemy) {
+        const goldReward = 10 + this.currentLevel * 5;
+        const expReward = 5 + this.currentLevel * 3;
+        this.gold += goldReward;
+        this.exp += expReward;
+        this.addLog(`💀 +${goldReward}💰 +${expReward}⚡`, '#ffd700');
+        this.checkLevelUp();
+      }
+    }
+  }
+
+  async playDeath(unit: Unit) {
+    if (!unit.container) return;
+    
+    await this.tweenPromise(unit.container, {
+      alpha: 0,
+      scale: 1.5,
+      duration: ANIM.death
+    });
+    
+    unit.container.destroy();
+  }
+
+  // ==================== 辅助方法 ====================
+
+  tweenPromise(target: any, props: any): Promise<void> {
+    return new Promise(resolve => {
+      this.tweens.add({
+        targets: target,
+        ...props,
+        onComplete: () => resolve()
+      });
+    });
+  }
+
+  delay(ms: number): Promise<void> {
+    return new Promise(resolve => {
+      this.time.delayedCall(ms, () => resolve());
+    });
+  }
+
+  updateCooldowns() {
+    this.skills.forEach(s => {
+      if (s.currentCooldown > 0) s.currentCooldown--;
+    });
+  }
+
+  // ==================== 战斗结果 ====================
+
+  checkBattleEnd(): boolean {
+    const heroAlive = this.heroUnits.some(u => u.hp > 0);
+    const enemyAlive = this.enemyUnits.some(u => u.hp > 0);
+    
+    if (!heroAlive) {
+      this.battleDefeat();
+      return true;
+    }
+    
+    if (!enemyAlive) {
+      this.battleVictory();
+      return true;
+    }
+    
+    return false;
+  }
+
+  async battleVictory() {
+    this.isBattleEnded = true;
+    this.currentLevel++;
+    
+    if (this.currentLevel > 3) {
+      await this.delay(500);
+      this.showResult('🎉 通关成功！', true);
+    } else {
+      this.addLog(`✅ 第${this.currentLevel - 1}关通过！`, '#4CAF50');
+      this.saveRun('ongoing');
+      await this.delay(1000);
+      this.scene.restart({ continue: true });
+    }
+  }
+
+  battleDefeat() {
+    this.isBattleEnded = true;
+    this.showResult('💀 战斗失败', false);
+  }
+
+  showResult(message: string, isVictory: boolean) {
     const width = this.cameras.main.width;
     const height = this.cameras.main.height;
     
-    // 根据关卡难度生成敌人数量
-    const enemyCount = Math.min(1 + Math.floor(this.currentLevel / 2), 5);
+    // 遮罩
+    this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.8);
     
-    this.enemies = [];
+    // 结果文字
+    const color = isVictory ? '#4CAF50' : '#ff4444';
+    this.add.text(width / 2, height / 2 - 50, message, {
+      fontSize: '32px',
+      color
+    }).setOrigin(0.5);
     
-    for (let i = 0; i < enemyCount; i++) {
-      const enemy = this.add.container(width - 100, height / 2 - 60 + i * 80);
-      
-      const enemySprite = this.add.text(0, 0, '👺', { fontSize: '40px' }).setOrigin(0.5);
-      enemy.add(enemySprite);
-      
-      enemy.setData('hp', 50 + this.currentLevel * 10);
-      enemy.setData('maxHp', 50 + this.currentLevel * 10);
-      enemy.setData('attack', 5 + this.currentLevel * 2);
-      
-      this.enemies.push(enemy);
-    }
-  }
-
-  startBattle() {
-    this.addLog('战斗开始！', '#ffd700');
+    // 奖励
+    this.add.text(width / 2, height / 2, `获得: ${this.gold}💰 ${this.exp}⚡`, {
+      fontSize: '20px',
+      color: '#ffd700'
+    }).setOrigin(0.5);
     
-    // 自动战斗循环
-    this.time.addEvent({
-      delay: 1000,
-      callback: this.battleTick,
-      callbackScope: this,
-      loop: true
-    });
-  }
-
-  battleTick() {
-    // 暂停时不执行
-    if (this.isPaused) return;
-    if (this.heroHp <= 0 || this.enemies.length === 0) return;
-
-    // 自动攻击
-    if (this.isAutoMode) {
-      this.heroAttack();
-    }
-
-    // 敌人攻击
-    this.enemies.forEach(enemy => {
-      if (enemy.getData('hp') > 0) {
-        this.enemyAttack(enemy);
-      }
-    });
-
-    // 自动使用技能
-    if (this.isAutoMode) {
-      this.autoUseSkills();
-    }
-
-    // 更新技能冷却
-    this.updateSkillCooldowns();
-
-    // 检查战斗结果
-    this.checkBattleResult();
+    // 返回按钮
+    const btn = this.add.rectangle(width / 2, height / 2 + 80, 150, 50, 0x667eea);
+    this.add.text(width / 2, height / 2 + 80, '返回主界面', {
+      fontSize: '18px',
+      color: '#ffffff'
+    }).setOrigin(0.5);
     
-    // 更新 UI
-    this.updateBattleUI();
-  }
-
-  heroAttack() {
-    if (this.enemies.length === 0) return;
-
-    const target = this.enemies[0];
-    let damage = 10 + this.currentLevel * 2;
-
-    // 暴击判定
-    const critSkill = this.skills.find(s => s.id === 'critical');
-    if (critSkill && Math.random() < (critSkill.chance || 0)) {
-      damage *= 2;
-      this.addLog('💥 暴击！', '#ff9800');
-    }
-
-    target.setData('hp', target.getData('hp') - damage);
-    this.addLog(`英雄攻击造成 ${damage} 伤害`, '#4CAF50');
-
-    // 攻击动画
-    this.tweens.add({
-      targets: this.hero,
-      x: 150,
-      duration: 100,
-      yoyo: true
-    });
-
-    if (target.getData('hp') <= 0) {
-      this.killEnemy(target);
-    }
-  }
-
-  enemyAttack(enemy: Phaser.GameObjects.Container) {
-    const damage = enemy.getData('attack') || 5;
+    btn.setInteractive({ useHandCursor: true });
+    btn.on('pointerdown', () => this.returnToMain(isVictory));
     
-    this.heroHp -= damage;
-    this.addLog(`敌人攻击造成 ${damage} 伤害`, '#ff4444');
-
-    this.tweens.add({
-      targets: enemy,
-      x: enemy.x - 20,
-      duration: 100,
-      yoyo: true
-    });
+    this.saveRun(isVictory ? 'completed' : 'failed');
   }
 
-  autoUseSkills() {
-    if (this.skills.length === 0) {
-      this.skills = [
-        {
-          id: 'fireball',
-          name: '火球术',
-          icon: '🔥',
-          type: 'active',
-          description: '造成攻击力150%伤害',
-          cooldown: 0,
-          damage: 1.5,
-          level: 1
-        },
-        {
-          id: 'critical',
-          name: '暴击',
-          icon: '💥',
-          type: 'passive',
-          description: '15%几率双倍伤害',
-          chance: 0.15,
-          level: 1
-        }
-      ];
-    }
-
-    this.skills.forEach(skill => {
-      if (skill.type === 'active' && skill.cooldown === 0 && this.enemies.length > 0) {
-        this.useSkill(skill);
-      }
-    });
-  }
-
-  updateSkillCooldowns() {
-    this.skills.forEach(skill => {
-      if (skill.cooldown && skill.cooldown > 0) {
-        skill.cooldown--;
-      }
-    });
-  }
-
-  useSkill(skill: Skill) {
-    if (skill.id === 'fireball' && this.enemies.length > 0) {
-      const target = this.enemies[0];
-      const damage = (10 + this.currentLevel * 2) * (skill.damage || 1.5);
-      target.setData('hp', target.getData('hp') - damage);
-      this.addLog(`🔥 火球术造成 ${Math.floor(damage)} 伤害！`, '#ff9800');
-      
-      skill.cooldown = 3;
-      
-      if (target.getData('hp') <= 0) {
-        this.killEnemy(target);
-      }
-    }
-  }
-
-  killEnemy(enemy: Phaser.GameObjects.Container) {
-    const index = this.enemies.indexOf(enemy);
-    if (index > -1) {
-      this.enemies.splice(index, 1);
-    }
-
-    this.tweens.add({
-      targets: enemy,
-      alpha: 0,
-      scale: 1.5,
-      duration: 300,
-      onComplete: () => enemy.destroy()
-    });
-
-    const goldReward = 10 + this.currentLevel * 5;
-    const expReward = 5 + this.currentLevel * 3;
-    
-    this.gold += goldReward;
-    this.exp += expReward;
-
-    this.addLog(`击杀敌人！+${goldReward}💰 +${expReward}⚡`, '#ffd700');
-
-    this.checkLevelUp();
-  }
+  // ==================== 升级 ====================
 
   checkLevelUp() {
     const user = DataManager.getCurrentUser();
     if (!user) return;
-
+    
     const expNeeded = user.level * 100;
     if (this.exp >= expNeeded) {
       this.exp -= expNeeded;
       user.level++;
-      this.heroMaxHp += 10;
-      this.heroHp = this.heroMaxHp;
+      
+      // 提升英雄属性
+      this.heroUnits.forEach(hero => {
+        hero.maxHp += 10;
+        hero.hp = hero.maxHp;
+        hero.attack += 2;
+      });
       
       this.addLog(`🎉 升级！等级 ${user.level}`, '#ffd700');
       this.updateBattleUI();
-      
-      // 技能选择
-      this.showSkillSelection();
+      this.showSkillSelection(user.level);
     }
   }
 
-  showSkillSelection() {
-    const user = DataManager.getCurrentUser();
-    const level = user ? user.level : 1;
-    
-    // 暂停战斗
+  showSkillSelection(level: number) {
     this.isPaused = true;
-    this.time.paused = true;
-
-    // 更新等级显示
+    
     this.skillSelectLevelEl.textContent = `达到等级 ${level}`;
     
-    // 生成随机技能选项
-    const availableSkills = this.generateSkillOptions();
+    const allSkills = [
+      { id: 'fireball2', name: '火球术强化', icon: '🔥', desc: '火球术伤害+20%', rarity: 'common', rarityText: '普通', statBonus: { stat: 'fireballDamage', value: 0.2 } },
+      { id: 'critical2', name: '暴击精通', icon: '💥', desc: '暴击率+5%', rarity: 'rare', rarityText: '稀有', statBonus: { stat: 'critRate', value: 0.05 } },
+      { id: 'heal', name: '生命回复', icon: '💚', desc: '立即恢复30%HP', rarity: 'common', rarityText: '普通', healPercent: 0.3 },
+      { id: 'attack', name: '力量提升', icon: '⚔️', desc: '基础攻击+10%', rarity: 'common', rarityText: '普通', statBonus: { stat: 'attack', value: 0.1 } },
+      { id: 'defense', name: '铁壁', icon: '🛡️', desc: '受到伤害-10%', rarity: 'rare', rarityText: '稀有' },
+      { id: 'speed', name: '急速', icon: '⚡', desc: '速度+15%', rarity: 'rare', rarityText: '稀有', statBonus: { stat: 'speed', value: 0.15 } },
+      { id: 'lifesteal', name: '生命偷取', icon: '🩸', desc: '攻击回复5%HP', rarity: 'epic', rarityText: '史诗' },
+      { id: 'doublehit', name: '连击', icon: '🎯', desc: '10%几率攻击两次', rarity: 'epic', rarityText: '史诗' },
+      { id: 'rage', name: '狂暴', icon: '😤', desc: 'HP<30%时伤害+50%', rarity: 'legendary', rarityText: '传说' },
+    ];
     
-    // 清空并生成选项
+    const shuffled = [...allSkills].sort(() => Math.random() - 0.5).slice(0, 3);
+    
     this.skillOptionsEl.innerHTML = '';
-    
-    availableSkills.forEach(skill => {
+    shuffled.forEach(skill => {
       const option = document.createElement('div');
       option.className = 'skill-option';
       option.innerHTML = `
@@ -444,14 +745,12 @@ export default class BattleScene extends Phaser.Scene {
         <div class="skill-option-rarity ${skill.rarity}">${skill.rarityText}</div>
       `;
       
-      // 触摸事件
       let isTouched = false;
       option.addEventListener('touchstart', (e) => {
         e.preventDefault();
         isTouched = true;
         this.selectSkill(skill);
       }, { passive: false });
-      
       option.addEventListener('click', (e) => {
         if (!isTouched) {
           e.preventDefault();
@@ -463,161 +762,67 @@ export default class BattleScene extends Phaser.Scene {
       this.skillOptionsEl.appendChild(option);
     });
     
-    // 显示弹窗
     this.skillSelectOverlay.classList.add('active');
   }
 
-  generateSkillOptions() {
-    const allSkills = [
-      { id: 'fireball2', name: '火球术强化', icon: '🔥', desc: '火球术伤害+20%', rarity: 'common', rarityText: '普通' },
-      { id: 'critical2', name: '暴击精通', icon: '💥', desc: '暴击率+5%', rarity: 'rare', rarityText: '稀有' },
-      { id: 'heal', name: '生命回复', icon: '💚', desc: '立即恢复30%HP', rarity: 'common', rarityText: '普通' },
-      { id: 'attack', name: '力量提升', icon: '⚔️', desc: '基础攻击+10%', rarity: 'common', rarityText: '普通' },
-      { id: 'defense', name: '铁壁', icon: '🛡️', desc: '受到伤害-10%', rarity: 'rare', rarityText: '稀有' },
-      { id: 'speed', name: '急速', icon: '⚡', desc: '攻击速度+15%', rarity: 'rare', rarityText: '稀有' },
-      { id: 'lifesteal', name: '生命偷取', icon: '🩸', desc: '攻击回复5%HP', rarity: 'epic', rarityText: '史诗' },
-      { id: 'doublehit', name: '连击', icon: '🎯', desc: '10%几率攻击两次', rarity: 'epic', rarityText: '史诗' },
-      { id: 'rage', name: '狂暴', icon: '😤', desc: 'HP<30%时伤害+50%', rarity: 'legendary', rarityText: '传说' },
-    ];
-    
-    // 随机选3个不重复的
-    const shuffled = [...allSkills].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, 3);
-  }
-
   selectSkill(skill: any) {
-    // 隐藏弹窗
     this.skillSelectOverlay.classList.remove('active');
     
     // 应用效果
-    switch (skill.id) {
-      case 'heal':
-        this.heroHp = Math.min(this.heroMaxHp, this.heroHp + this.heroMaxHp * 0.3);
-        this.addLog('💚 恢复 30% HP！', '#4CAF50');
-        break;
-      case 'fireball2':
+    if (skill.healPercent) {
+      this.heroUnits.forEach(hero => {
+        hero.hp = Math.min(hero.maxHp, hero.hp + hero.maxHp * skill.healPercent);
+        this.updateUnitHpBar(hero);
+      });
+      this.addLog('💚 恢复 30% HP！', '#4CAF50');
+    }
+    
+    if (skill.statBonus) {
+      const { stat, value } = skill.statBonus;
+      if (stat === 'attack') {
+        this.heroUnits.forEach(h => h.attack *= (1 + value));
+      } else if (stat === 'speed') {
+        this.heroUnits.forEach(h => h.speed *= (1 + value));
+      } else if (stat === 'critRate') {
+        this.heroUnits.forEach(h => h.critRate += value);
+      } else if (stat === 'fireballDamage') {
         const fireball = this.skills.find(s => s.id === 'fireball');
-        if (fireball && fireball.damage) {
-          fireball.damage += 0.2;
-          this.addLog('🔥 火球术伤害提升！', '#ff9800');
+        if (fireball && fireball.damageMultiplier) {
+          fireball.damageMultiplier += value;
         }
-        break;
-      case 'critical2':
-        const crit = this.skills.find(s => s.id === 'critical');
-        if (crit && crit.chance) {
-          crit.chance += 0.05;
-          this.addLog('💥 暴击率提升！', '#ffd700');
-        }
-        break;
-      case 'attack':
-        // 可以添加基础攻击力属性
-        this.addLog('⚔️ 基础攻击提升！', '#ff9800');
-        break;
-      case 'defense':
-        this.addLog('🛡️ 防御提升！', '#4a90d9');
-        break;
-      case 'speed':
-        this.addLog('⚡ 攻击速度提升！', '#ffd700');
-        break;
-      case 'lifesteal':
-        this.addLog('🩸 获得生命偷取！', '#a335ee');
-        break;
-      case 'doublehit':
-        this.addLog('🎯 获得连击！', '#a335ee');
-        break;
-      case 'rage':
-        this.addLog('😤 获得狂暴！', '#ff8000');
-        break;
+      }
+      this.addLog(`${skill.icon} ${skill.name}！`, '#ffd700');
     }
     
     this.updateBattleUI();
-    
-    // 恢复战斗
     this.isPaused = false;
-    this.time.paused = false;
   }
 
-  checkBattleResult() {
-    if (this.heroHp <= 0) {
-      this.battleDefeat();
-    }
-    
-    if (this.enemies.length === 0) {
-      this.battleVictory();
-    }
-  }
-
-  battleVictory() {
-    this.time.paused = true;
-    
-    this.currentLevel++;
-    
-    if (this.currentLevel > 3) {
-      this.showResult('通关成功！', true);
-    } else {
-      this.saveRun('ongoing');
-      
-      this.time.delayedCall(1000, () => {
-        this.scene.restart({ continue: true });
-      });
-    }
-  }
-
-  battleDefeat() {
-    this.showResult('战斗失败', false);
-  }
-
-  showResult(message: string, isVictory: boolean) {
-    const width = this.cameras.main.width;
-    const height = this.cameras.main.height;
-
-    this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.8);
-
-    const color = isVictory ? '#4CAF50' : '#ff4444';
-    this.add.text(width / 2, height / 2 - 50, message, {
-      fontSize: '32px',
-      color: color
-    }).setOrigin(0.5);
-
-    this.add.text(width / 2, height / 2, `获得: ${this.gold}💰 ${this.exp}⚡`, {
-      fontSize: '20px',
-      color: '#ffd700'
-    }).setOrigin(0.5);
-
-    const btn = this.add.rectangle(width / 2, height / 2 + 80, 150, 50, 0x667eea);
-    this.add.text(width / 2, height / 2 + 80, '返回主界面', {
-      fontSize: '18px',
-      color: '#ffffff'
-    }).setOrigin(0.5);
-    
-    btn.setInteractive({ useHandCursor: true });
-    btn.on('pointerdown', () => {
-      this.returnToMain(isVictory);
-    });
-
-    this.saveRun(isVictory ? 'completed' : 'failed');
-  }
+  // ==================== 数据保存 ====================
 
   saveRun(status: 'ongoing' | 'completed' | 'failed') {
     const user = DataManager.getCurrentUser();
     if (!user) return;
-
+    
+    const totalHp = this.heroUnits.reduce((sum, u) => sum + u.hp, 0);
+    const totalMaxHp = this.heroUnits.reduce((sum, u) => sum + u.maxHp, 0);
+    
     const run: RunData = {
       runId: `run_${Date.now()}`,
       heroId: 'warrior',
       heroLevel: user.level,
       currentLevel: this.currentLevel,
-      currentHp: Math.floor(this.heroHp),
-      maxHp: this.heroMaxHp,
+      currentHp: Math.floor(totalHp),
+      maxHp: totalMaxHp,
       skills: this.skills,
       equipment: [],
       gold: this.gold,
       exp: this.exp,
       startTime: Date.now(),
-      status: status,
+      status,
       levelsCompleted: []
     };
-
+    
     if (status === 'completed' || status === 'failed') {
       user.gold += this.gold;
       user.statistics.totalRuns++;
@@ -631,34 +836,25 @@ export default class BattleScene extends Phaser.Scene {
     }
   }
 
-  returnToMain(_isVictory: boolean = false) {
+  returnToMain(_isVictory?: boolean) {
     this.hideUI('battle-ui');
     this.scene.start('MainScene');
   }
 
   addLog(message: string, color: string = '#ffffff') {
     this.battleLog.push(message);
-    if (this.battleLog.length > 3) {
-      this.battleLog.shift();
-    }
-
+    if (this.battleLog.length > 3) this.battleLog.shift();
+    
     this.battleLogEl.innerHTML = this.battleLog
       .map(log => `<span style="color:${color}">${log}</span>`)
       .join('<br>');
   }
 
   shutdown() {
-    // 隐藏所有 UI
     this.hideUI('battle-ui');
-    
-    // 隐藏技能选择弹窗
     if (this.skillSelectOverlay) {
       this.skillSelectOverlay.classList.remove('active');
     }
-    
-    // 暂停所有计时器
-    this.time.paused = true;
-    
     console.log('=== BattleScene shutdown ===');
   }
 }
