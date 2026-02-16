@@ -120,11 +120,22 @@ export default class BattleScene extends Phaser.Scene {
     if (data.continue) {
       const run = DataManager.getCurrentRun();
       if (run) {
-        this.currentStage = run.currentLevel;  // currentLevel 存的是小关卡
+        // 从存档读取大关卡和小关卡
+        // currentLevel 存的是小关卡，heroLevel 存的是大关卡
+        this.currentChapter = run.heroLevel || 1;
+        this.currentStage = run.currentLevel;
         this.gold = run.gold;
         this.exp = run.exp;
         this.skills = run.skills || [];
+        console.log(`继续冒险: 第${this.currentChapter}-${this.currentStage}关`);
       }
+    } else {
+      // 新冒险，从最高大关卡+1开始
+      const user = DataManager.getCurrentUser();
+      if (user) {
+        this.currentChapter = (user.statistics?.bestLevel || 0) + 1;
+      }
+      console.log(`新冒险: 第${this.currentChapter}大关卡`);
     }
   }
 
@@ -790,11 +801,13 @@ export default class BattleScene extends Phaser.Scene {
     if (user) {
       user.gold += this.gold;
       user.statistics.totalRuns++;
-      user.statistics.bestLevel = Math.max(user.statistics.bestLevel, this.currentChapter);
+      // 更新最高大关卡
+      user.statistics.bestLevel = Math.max(user.statistics.bestLevel || 0, this.currentChapter);
       DataManager.updateUserData(user);
+      console.log(`大关卡 ${this.currentChapter} 通过！最高大关卡: ${user.statistics.bestLevel}`);
     }
     
-    // 清除冒险数据，准备下一大关卡
+    // 清除冒险数据，下次从新大关卡开始
     DataManager.clearRunData();
     
     this.showResult(`🎉 第 ${this.currentChapter} 大关卡通关！`, true);
@@ -959,8 +972,8 @@ export default class BattleScene extends Phaser.Scene {
     const run: RunData = {
       runId: `run_${Date.now()}`,
       heroId: 'warrior',
-      heroLevel: user.level,
-      currentLevel: this.currentStage,  // 存储小关卡
+      heroLevel: this.currentChapter,  // 用 heroLevel 存储大关卡
+      currentLevel: this.currentStage, // currentLevel 存储小关卡
       currentHp: Math.floor(totalHp),
       maxHp: totalMaxHp,
       skills: this.skills,
@@ -985,15 +998,14 @@ export default class BattleScene extends Phaser.Scene {
 
   returnToMain(_isVictory?: boolean) {
     // 中途退出保存进度
-    // 只保存已获得的技能和属性加成
     const user = DataManager.getCurrentUser();
     if (user && !_isVictory) {
-      // 保存技能（肉鸽获得的强化）
+      // 保存当前冒险进度（大关卡+小关卡+强化）
       const run: RunData = {
         runId: `run_${Date.now()}`,
         heroId: 'warrior',
-        heroLevel: user.level,
-        currentLevel: this.currentStage, // 保持当前小关卡，下次重新打
+        heroLevel: this.currentChapter,  // 保存大关卡
+        currentLevel: this.currentStage, // 保存小关卡
         currentHp: this.heroUnits.reduce((sum, u) => sum + u.maxHp, 0), // 恢复满血
         maxHp: this.heroUnits.reduce((sum, u) => sum + u.maxHp, 0),
         skills: this.skills,
@@ -1005,7 +1017,7 @@ export default class BattleScene extends Phaser.Scene {
         levelsCompleted: []
       };
       DataManager.saveRunData(run);
-      console.log('中途退出，保存进度，下次从第', this.currentChapter, '-', this.currentStage, '关重新开始');
+      console.log(`中途退出，保存进度: 第${this.currentChapter}-${this.currentStage}关`);
     }
     
     this.hideUI('battle-ui');

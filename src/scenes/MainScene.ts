@@ -76,17 +76,16 @@ export default class MainScene extends Phaser.Scene {
 
   updateAdventureButton() {
     const run = DataManager.getCurrentRun();
+    const user = DataManager.getCurrentUser();
+    const currentChapter = user?.statistics?.bestLevel ? user.statistics.bestLevel + 1 : 1;
+    
     let buttonText = '⚔️ 开始冒险';
-    let subText = '推荐等级: ★';
+    let subText = `第 ${currentChapter} 大关卡`;
 
-    if (run) {
-      if (run.status === 'ongoing') {
-        buttonText = '⚔️ 继续冒险';
-        subText = `第${run.currentLevel}关 进行中`;
-      } else if (run.status === 'completed' || run.status === 'failed') {
-        buttonText = '⚔️ 新的冒险';
-        subText = run.status === 'completed' ? '上次: 通关' : '上次: 失败';
-      }
+    if (run && run.status === 'ongoing') {
+      // 有进行中的冒险（中途退出的）
+      buttonText = '⚔️ 继续冒险';
+      subText = `第1-${run.currentLevel}关 进行中`;
     }
 
     const titleEl = document.querySelector('.adventure-btn .title');
