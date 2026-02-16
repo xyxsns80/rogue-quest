@@ -26,7 +26,7 @@ export interface UserData {
   inventory: any[];
   statistics: {
     totalRuns: number;
-    bestLevel: number;
+    bestLevel: number;  // 最高通关大关卡
     totalGold: number;
   };
   idleRewards: {
@@ -37,12 +37,34 @@ export interface UserData {
   lastLoginAt: number;
 }
 
+// 队伍中的生物
+export interface BattleCreature {
+  creatureId: string;  // 生物定义ID
+  star: 1 | 2 | 3;    // 星级
+  
+  // 战斗中的当前HP
+  currentHp: number;
+}
+
+// 羁绊
+export interface Synergy {
+  race: string;
+  count: number;
+  level: number;
+  bonus: {
+    attack?: number;
+    defense?: number;
+    hp?: number;
+    speed?: number;
+  };
+}
+
 // 冒险数据接口
 export interface RunData {
   runId: string;
   heroId: string;
-  heroLevel: number;
-  currentLevel: number;
+  heroLevel: number;    // 大关卡号
+  currentLevel: number; // 小关卡号
   currentHp: number;
   maxHp: number;
   skills: any[];
@@ -52,6 +74,10 @@ export interface RunData {
   startTime: number;
   status: 'ongoing' | 'completed' | 'failed';
   levelsCompleted: number[];
+  
+  // 生物队伍
+  creatures: BattleCreature[];
+  teamSize: number;  // 队伍上限（默认5，特殊7）
 }
 
 // 数据管理器

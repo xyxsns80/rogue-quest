@@ -986,7 +986,9 @@ export default class BattleScene extends Phaser.Scene {
       exp: this.exp,
       startTime: Date.now(),
       status,
-      levelsCompleted: []
+      levelsCompleted: [],
+      creatures: [],  // TODO: 从队伍中获取
+      teamSize: 5,
     };
     
     if (status === 'completed' || status === 'failed') {
@@ -1018,7 +1020,9 @@ export default class BattleScene extends Phaser.Scene {
         exp: this.exp,
         startTime: Date.now(),
         status: 'ongoing',
-        levelsCompleted: []
+        levelsCompleted: [],
+        creatures: [],  // TODO: 从队伍中获取
+        teamSize: 5,
       };
       DataManager.saveRunData(run);
       console.log(`中途退出，保存进度: 第${this.currentChapter}-${this.currentStage}关`);
