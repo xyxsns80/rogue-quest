@@ -9,9 +9,8 @@
   <style>
     * {
       margin: 0;
-      padding:0;
+      padding: 0;
       box-sizing: border-box;
-      touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
     }
     
@@ -20,22 +19,383 @@
       height: 100%;
       overflow: hidden;
       background: #1a1a2e;
-      touch-action: none;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
     
     #game {
+      position: absolute;
+      top: 0;
+      left: 0;
       width: 100%;
       height: 100%;
-      touch-action: none;
+      z-index: 1;
     }
     
     #game canvas {
-      touch-action: none;
+      display: block;
+    }
+    
+    /* HTML UI 覆盖层 */
+    #ui-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      pointer-events: none;
+      display: none;
+    }
+    
+    #ui-overlay.active {
+      display: block;
+    }
+    
+    /* 顶部信息栏 */
+    .top-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 80px;
+      background: linear-gradient(180deg, rgba(22, 33, 62, 0.95) 0%, rgba(22, 33, 62, 0.8) 100%);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 15px;
+      pointer-events: auto;
+    }
+    
+    .player-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    
+    .player-name {
+      color: #fff;
+      font-size: 14px;
+    }
+    
+    .player-level {
+      color: #7fff7f;
+      font-size: 12px;
+    }
+    
+    .resources {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+    }
+    
+    .gold {
+      color: #ffd700;
+      font-size: 14px;
+    }
+    
+    .diamond {
+      color: #87ceeb;
+      font-size: 12px;
+    }
+    
+    /* 开始冒险按钮 */
+    .adventure-btn {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 85%;
+      height: 90px;
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%);
+      border: 3px solid #667eea;
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      pointer-events: auto;
+      transition: all 0.2s;
+    }
+    
+    .adventure-btn:active {
+      transform: translate(-50%, -50%) scale(0.95);
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.5) 0%, rgba(118, 75, 162, 0.5) 100%);
+    }
+    
+    .adventure-btn .title {
+      color: #ffd700;
+      font-size: 22px;
+      font-weight: bold;
+    }
+    
+    .adventure-btn .subtitle {
+      color: #888;
+      font-size: 12px;
+      margin-top: 5px;
+    }
+    
+    /* 功能按钮组 */
+    .btn-group {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      pointer-events: auto;
+    }
+    
+    .btn-group.cultivation {
+      top: 410px;
+    }
+    
+    .btn-group.function {
+      top: 495px;
+    }
+    
+    .func-btn {
+      width: 100px;
+      height: 60px;
+      background: rgba(102, 126, 234, 0.2);
+      border: 2px solid #667eea;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .func-btn:active {
+      background: rgba(102, 126, 234, 0.4);
+      transform: scale(0.95);
+    }
+    
+    .func-btn .icon {
+      font-size: 24px;
+    }
+    
+    .func-btn .name {
+      color: #fff;
+      font-size: 12px;
+      margin-top: 4px;
+    }
+    
+    .func-btn.secondary {
+      background: rgba(68, 68, 68, 0.5);
+      border-color: #666;
+    }
+    
+    .func-btn.secondary .name {
+      color: #aaa;
+    }
+    
+    /* 底部放置收益 */
+    .idle-section {
+      position: absolute;
+      bottom: 80px;
+      left: 10px;
+      right: 10px;
+      height: 90px;
+      background: rgba(22, 33, 62, 0.95);
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      pointer-events: auto;
+      padding: 10px;
+    }
+    
+    .idle-title {
+      color: #888;
+      font-size: 12px;
+    }
+    
+    .idle-rate {
+      color: #ffd700;
+      font-size: 14px;
+      margin-top: 4px;
+    }
+    
+    .idle-accumulated {
+      color: #fff;
+      font-size: 12px;
+      margin-top: 4px;
+    }
+    
+    .idle-buttons {
+      display: flex;
+      gap: 20px;
+      margin-top: 8px;
+    }
+    
+    .idle-btn {
+      width: 100px;
+      height: 30px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .idle-btn.collect {
+      background: #4CAF50;
+      color: #fff;
+    }
+    
+    .idle-btn.speed {
+      background: #ff9800;
+      color: #fff;
+    }
+    
+    .idle-btn:active {
+      transform: scale(0.95);
+    }
+    
+    /* 底部导航 */
+    .bottom-nav {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background: rgba(22, 33, 62, 0.95);
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      pointer-events: auto;
+      border-top: 1px solid #333;
+    }
+    
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      cursor: pointer;
+    }
+    
+    .nav-item .icon {
+      font-size: 18px;
+    }
+    
+    .nav-item .name {
+      color: #888;
+      font-size: 10px;
+      margin-top: 2px;
+    }
+    
+    /* Toast 提示 */
+    .toast {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.8);
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s;
+      z-index: 100;
+    }
+    
+    .toast.show {
+      opacity: 1;
     }
   </style>
 </head>
 <body>
   <div id="game"></div>
+  
+  <!-- HTML UI 覆盖层 -->
+  <div id="ui-overlay" class="active">
+    <!-- 顶部信息栏 -->
+    <div class="top-bar">
+      <div class="player-info">
+        <div class="player-name">👤<span id="player-name">玩家</span></div>
+        <div class="player-level">LV.<span id="player-level">1</span></div>
+      </div>
+      <div class="resources">
+        <div class="gold">💰<span id="gold">0</span></div>
+        <div class="diamond">💎<span id="diamond">0</span></div>
+      </div>
+    </div>
+    
+    <!-- 开始冒险按钮 -->
+    <div class="adventure-btn" id="adventure-btn">
+      <div class="title">⚔️ 开始冒险</div>
+      <div class="subtitle" id="adventure-subtitle">推荐等级: ★</div>
+    </div>
+    
+    <!-- 养成入口 -->
+    <div class="btn-group cultivation">
+      <div class="func-btn" data-action="hero">
+        <div class="icon">🦸</div>
+        <div class="name">英雄</div>
+      </div>
+      <div class="func-btn" data-action="talent">
+        <div class="icon">🌟</div>
+        <div class="name">天赋</div>
+      </div>
+      <div class="func-btn" data-action="equipment">
+        <div class="icon">⚔️</div>
+        <div class="name">装备</div>
+      </div>
+    </div>
+    
+    <!-- 功能入口 -->
+    <div class="btn-group function">
+      <div class="func-btn secondary" data-action="task">
+        <div class="icon">📋</div>
+        <div class="name">任务</div>
+      </div>
+      <div class="func-btn secondary" data-action="shop">
+        <div class="icon">🏪</div>
+        <div class="name">商店</div>
+      </div>
+      <div class="func-btn secondary" data-action="collection">
+        <div class="icon">📖</div>
+        <div class="name">图鉴</div>
+      </div>
+    </div>
+    
+    <!-- 放置收益 -->
+    <div class="idle-section">
+      <div class="idle-title">💰 挂机收益</div>
+      <div class="idle-rate">+<span id="idle-rate">10</span>/小时</div>
+      <div class="idle-accumulated">已累积: <span id="idle-accumulated">0</span></div>
+      <div class="idle-buttons">
+        <button class="idle-btn collect" id="collect-btn">📦 领取</button>
+        <button class="idle-btn speed" id="speed-btn">⚡ 加速</button>
+      </div>
+    </div>
+    
+    <!-- 底部导航 -->
+    <div class="bottom-nav">
+      <div class="nav-item" data-action="settings">
+        <div class="icon">⚙️</div>
+        <div class="name">设置</div>
+      </div>
+      <div class="nav-item" data-action="home">
+        <div class="icon">🏠</div>
+        <div class="name">主页</div>
+      </div>
+      <div class="nav-item" data-action="stats">
+        <div class="icon">📊</div>
+        <div class="name">统计</div>
+      </div>
+    </div>
+    
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+  </div>
+  
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
