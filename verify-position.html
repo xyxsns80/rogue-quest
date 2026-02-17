@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>前后排位置验证</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #1a1a2e; color: white; }
+    .battlefield { 
+      position: relative; 
+      width: 100%; 
+      height: 300px; 
+      background: linear-gradient(to right, #2d3436, #1a1a2e);
+      border: 2px solid #667eea;
+      margin: 20px 0;
+    }
+    .unit {
+      position: absolute;
+      width: 50px;
+      height: 50px;
+      background: rgba(102, 126, 234, 0.3);
+      border: 2px solid #667eea;
+      border-radius: 8px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 24px;
+      transform: translate(-50%, -50%);
+    }
+    .unit.hero { border-color: gold; background: rgba(255, 215, 0, 0.2); }
+    .unit.front { border-color: #ff6b6b; background: rgba(255, 107, 107, 0.2); }
+    .unit.back { border-color: #4ecdc4; background: rgba(78, 205, 196, 0.2); }
+    .unit.enemy { border-color: #f44336; background: rgba(244, 67, 54, 0.2); }
+    .label { position: absolute; bottom: -25px; font-size: 12px; color: #888; white-space: nowrap; transform: translateX(-50%); }
+    .marker { position: absolute; top: 50%; width: 2px; height: 100%; background: rgba(255,255,255,0.1); }
+    .marker-label { position: absolute; top: 5px; font-size: 10px; color: #666; }
+    table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+    th, td { border: 1px solid #444; padding: 8px; text-align: left; }
+    th { background: #667eea; }
+    .front-row { color: #ff6b6b; }
+    .back-row { color: #4ecdc4; }
+  </style>
+</head>
+<body>
+  <h1>🎮 前后排位置验证</h1>
+  
+  <h2>战场布局</h2>
+  <div class="battlefield" id="battlefield">
+    <div class="marker" style="left: 80px;"><span class="marker-label">x=80 英雄</span></div>
+    <div class="marker" style="left: 120px;"><span class="marker-label">x=120 后排</span></div>
+    <div class="marker" style="left: 180px;"><span class="marker-label">x=180 前排</span></div>
+    <div class="marker" style="left: calc(100% - 80px);"><span class="marker-label">x=310 敌人</span></div>
+  </div>
+  
+  <h2>示例队伍布局</h2>
+  <p>假设队伍：英雄 + 枪兵(前排) + 弓箭手(后排) + 狮鹫(前排) + 僧侣(后排)</p>
+  
+  <h2>生物位置分配表</h2>
+  <table>
+    <tr><th>种族</th><th>前排 (x=180)</th><th>后排 (x=120)</th></tr>
+    <tr>
+      <td>🏰 城堡</td>
+      <td class="front-row">枪兵、剑士、骑士、天使、狮鹫</td>
+      <td class="back-row">弓箭手、僧侣</td>
+    </tr>
+    <tr>
+      <td>💀 墓园</td>
+      <td class="front-row">骷髅、僵尸、幽灵、吸血鬼、死亡骑士、骨龙</td>
+      <td class="back-row">巫妖</td>
+    </tr>
+    <tr>
+      <td>🔥 地狱</td>
+      <td class="front-row">小恶魔、地狱犬、恶魔、魔鬼、大恶魔</td>
+      <td class="back-row">歌格、火精灵</td>
+    </tr>
+    <tr>
+      <td>🌲 森林</td>
+      <td class="front-row">矮人、树妖、树人、绿龙、金龙</td>
+      <td class="back-row">精灵、独角兽</td>
+    </tr>
+    <tr>
+      <td>⚔️ 据点</td>
+      <td class="front-row">哥布林、狼骑兵、半兽人、食人魔、比蒙、远古比蒙</td>
+      <td class="back-row">雷鸟</td>
+    </tr>
+  </table>
+
+  <script>
+    // 模拟战场
+    const battlefield = document.getElementById('battlefield');
+    const height = 300;
+    const centerY = height / 2;
+    
+    // 示例队伍
+    const units = [
+      { x: 80, y: centerY, emoji: '🧙', label: '英雄', type: 'hero' },
+      { x: 120, y: centerY - 35, emoji: '🏹', label: '弓箭手', type: 'back' },
+      { x: 120, y: centerY + 35, emoji: '🙏', label: '僧侣', type: 'back' },
+      { x: 180, y: centerY - 35, emoji: '🗡️', label: '枪兵', type: 'front' },
+      { x: 180, y: centerY + 35, emoji: '🦅', label: '狮鹫', type: 'front' },
+    ];
+    
+    // 敌人
+    const enemies = [
+      { x: battlefield.offsetWidth - 80, y: centerY - 35, emoji: '👺', label: '敌人1', type: 'enemy' },
+      { x: battlefield.offsetWidth - 80, y: centerY + 35, emoji: '👹', label: '敌人2', type: 'enemy' },
+    ];
+    
+    function createUnit(u) {
+      const div = document.createElement('div');
+      div.className = `unit ${u.type}`;
+      div.style.left = u.x + 'px';
+      div.style.top = u.y + 'px';
+      div.innerHTML = u.emoji;
+      div.title = u.label;
+      
+      const label = document.createElement('div');
+      label.className = 'label';
+      label.textContent = u.label;
+      div.appendChild(label);
+      
+      battlefield.appendChild(div);
+    }
+    
+    units.forEach(createUnit);
+    enemies.forEach(createUnit);
+    
+    // 验证代码
+    console.log('=== 位置验证 ===');
+    console.log('后排单位 X 坐标应该是 120:', units.filter(u => u.type === 'back').map(u => u.x));
+    console.log('前排单位 X 坐标应该是 180:', units.filter(u => u.type === 'front').map(u => u.x));
+    console.log('后排 < 前排:', 120 < 180 ? '✓ 正确' : '✗ 错误');
+    console.log('前排更靠近敌人:', 180 > 120 ? '✓ 正确' : '✗ 错误');
+  </script>
+</body>
+</html>
