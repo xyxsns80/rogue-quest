@@ -380,49 +380,87 @@ export default class BattleScene extends Phaser.Scene {
     }
     
     const centerY = this.cameras.main.height / 2;
-    const startX = 120;  // 第一个生物的x位置
-    const spacing = 60;  // 生物之间的间距
+    const frontX = 120;   // 前排X坐标
+    const backX = 180;    // 后排X坐标
+    const ySpacing = 70;  // Y间距
+    
+    // 分离前后排生物
+    const frontCreatures: { creature: typeof creatures[0]; def: NonNullable<ReturnType<typeof getCreatureById>>; index: number }[] = [];
+    const backCreatures: { creature: typeof creatures[0]; def: NonNullable<ReturnType<typeof getCreatureById>>; index: number }[] = [];
     
     creatures.forEach((creature, index) => {
-      console.log(`处理生物 ${index}:`, creature.creatureId, 'star:', creature.star);
-      
-      const stats = cm.getCreatureStats(creature);
-      if (!stats) {
-        console.error('无法获取生物属性:', creature.creatureId);
-        return;
-      }
-      
       const def = getCreatureById(creature.creatureId);
-      if (!def) {
-        console.error('无法找到生物定义:', creature.creatureId);
-        return;
+      if (def) {
+        if (def.position === 'front') {
+          frontCreatures.push({ creature, def, index });
+        } else {
+          backCreatures.push({ creature, def, index });
+        }
       }
+    });
+    
+    console.log(`前排生物: ${frontCreatures.length}, 后排生物: ${backCreatures.length}`);
+    
+    // 创建前排单位
+    frontCreatures.forEach((item, i) => {
+      const { creature, def } = item;
+      const stats = cm.getCreatureStats(creature);
+      if (!stats) return;
       
       const unit: Unit = {
-        id: `creature_${index}`,
+        id: `creature_front_${i}`,
         name: def.name,
         isEnemy: false,
-        index: index + 1,  // 0是英雄，1+是生物
+        index: this.heroUnits.length,
         level: def.tier,
         hp: stats.hp,
         maxHp: stats.hp,
         attack: stats.attack,
         defense: stats.defense,
         speed: stats.speed,
-        critRate: 0.05 + (creature.star * 0.02),  // 星级增加暴击
-        critDamage: 1.5 + (creature.star * 0.2),  // 星级增加暴击伤害
+        critRate: 0.05 + (creature.star * 0.02),
+        critDamage: 1.5 + (creature.star * 0.2),
         sprite: def.icon
       };
       
-      // 计算Y位置（英雄在中间，生物分布在上下）
-      const yOffset = (index % 2 === 0 ? -1 : 1) * Math.floor((index + 1) / 2) * 70;
-      const y = centerY + yOffset;
-      const x = startX + Math.floor(index / 2) * spacing;
+      // 前排Y位置
+      const y = centerY + (i - (frontCreatures.length - 1) / 2) * ySpacing;
       
-      console.log(`创建生物单位: ${def.name} ★${creature.star} 位置(${x}, ${y}) HP:${stats.hp}`);
+      console.log(`创建前排单位: ${def.name} ★${creature.star} 位置(${frontX}, ${y})`);
       
       this.heroUnits.push(unit);
-      this.createUnitSprite(unit, x, y);
+      this.createUnitSprite(unit, frontX, y);
+    });
+    
+    // 创建后排单位
+    backCreatures.forEach((item, i) => {
+      const { creature, def } = item;
+      const stats = cm.getCreatureStats(creature);
+      if (!stats) return;
+      
+      const unit: Unit = {
+        id: `creature_back_${i}`,
+        name: def.name,
+        isEnemy: false,
+        index: this.heroUnits.length,
+        level: def.tier,
+        hp: stats.hp,
+        maxHp: stats.hp,
+        attack: stats.attack,
+        defense: stats.defense,
+        speed: stats.speed,
+        critRate: 0.05 + (creature.star * 0.02),
+        critDamage: 1.5 + (creature.star * 0.2),
+        sprite: def.icon
+      };
+      
+      // 后排Y位置
+      const y = centerY + (i - (backCreatures.length - 1) / 2) * ySpacing;
+      
+      console.log(`创建后排单位: ${def.name} ★${creature.star} 位置(${backX}, ${y})`);
+      
+      this.heroUnits.push(unit);
+      this.createUnitSprite(unit, backX, y);
     });
     
     console.log('生物单位创建完成，总数:', this.heroUnits.length);
@@ -1099,7 +1137,12 @@ export default class BattleScene extends Phaser.Scene {
       console.log(`大关卡 ${this.currentChapter} 通过！最高大关卡: ${user.statistics.bestLevel}`);
     }
     
-    // 清除冒险数据，下次从新大关卡开始
+    // 清空生物队伍（新大关卡重新开始肉鸽）
+    this.getCreatureManager().clear();
+    CreatureManager.resetInstance();
+    console.log('生物队伍已清空，新大关卡重新开始肉鸽');
+    
+    // 清除冒险数据
     DataManager.clearRunData();
     
     this.showResult(`🎉 第 ${this.currentChapter} 大关卡通关！`, true);
