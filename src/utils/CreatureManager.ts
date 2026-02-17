@@ -4,17 +4,35 @@ import type { BattleCreature, Synergy } from './DataManager';
 import { CREATURES, getCreatureById, SYNERGY_LEVELS } from '../data/Creatures';
 import type { CreatureDef } from '../data/Creatures';
 
+// 全局单例
+let instance: CreatureManager | null = null;
+
 export class CreatureManager {
   private creatures: BattleCreature[] = [];
   private teamSize: number = 5;
   
   constructor() {
+    // 如果已有实例，返回现有实例
+    if (instance) {
+      return instance;
+    }
+    
     // 从存档恢复
     const run = DataManager.getCurrentRun();
+    console.log('CreatureManager 初始化，从存档恢复:', run?.creatures?.length || 0, '个生物');
+    
     if (run && run.creatures) {
       this.creatures = run.creatures;
       this.teamSize = run.teamSize || 5;
     }
+    
+    // 保存单例
+    instance = this;
+  }
+  
+  // 重置单例（用于测试或重新开始）
+  static resetInstance() {
+    instance = null;
   }
   
   // 获取当前队伍
@@ -39,16 +57,19 @@ export class CreatureManager {
   
   // 添加新生物
   addCreature(creatureId: string): { success: boolean; message: string; upgraded?: boolean; newStar?: number } {
-    console.log('CreatureManager.addCreature called with:', creatureId);
+    console.log('=== CreatureManager.addCreature ===');
+    console.log('传入 creatureId:', creatureId);
+    console.log('当前队伍:', this.creatures.map(c => `${c.creatureId}(★${c.star})`).join(', '));
+    console.log('队伍状态:', this.creatures.length, '/', this.teamSize);
+    
     const def = getCreatureById(creatureId);
     if (!def) {
-      console.error('Creature not found:', creatureId);
+      console.error('生物不存在:', creatureId);
       return { success: false, message: '生物不存在' };
     }
     
     // 检查是否已有该生物
     const existing = this.creatures.find(c => c.creatureId === creatureId);
-    console.log('Existing creature:', existing, 'Current team:', this.creatures.length, '/', this.teamSize);
     
     if (existing) {
       // 已有该生物，尝试升星
@@ -56,13 +77,13 @@ export class CreatureManager {
         return { success: false, message: '该生物已满星，无法继续获得' };
       }
       existing.star = (existing.star + 1) as 1 | 2 | 3;
-      console.log('Upgraded to star:', existing.star);
+      console.log('升星成功:', def.name, '→ ★', existing.star);
       return { success: true, message: `${def.name} 升星成功！`, upgraded: true, newStar: existing.star };
     }
     
     // 新生物
     if (this.isTeamFull()) {
-      console.log('Team is full!');
+      console.log('队伍已满，无法添加');
       return { success: false, message: '队伍已满' };
     }
     
@@ -71,7 +92,7 @@ export class CreatureManager {
       star: 1,
       currentHp: def.baseHp,
     });
-    console.log('Added new creature, team size now:', this.creatures.length);
+    console.log('添加成功，当前队伍:', this.creatures.map(c => c.creatureId).join(', '));
     
     return { success: true, message: `获得 ${def.name}！` };
   }
@@ -217,10 +238,16 @@ export class CreatureManager {
   // 保存到RunData
   saveToRun() {
     const run = DataManager.getCurrentRun();
+    console.log('=== CreatureManager.saveToRun ===');
+    console.log('当前生物:', this.creatures.length, this.creatures.map(c => c.creatureId).join(', '));
+    
     if (run) {
-      run.creatures = this.creatures;
+      run.creatures = [...this.creatures];  // 复制数组
       run.teamSize = this.teamSize;
       DataManager.saveRunData(run);
+      console.log('已保存到 RunData');
+    } else {
+      console.warn('无法保存：没有当前 RunData');
     }
   }
   
