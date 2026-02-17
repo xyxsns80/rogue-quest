@@ -638,6 +638,7 @@ export default class BattleScene extends Phaser.Scene {
 
   async startBattle() {
     console.log('=== startBattle 开始 ===');
+    console.log('屏幕尺寸:', this.cameras.main.width, 'x', this.cameras.main.height);
     console.log('当前状态: currentStage=', this.currentStage, 'isBattleEnded=', this.isBattleEnded, 'isPaused=', this.isPaused);
     
     // 完全重置战斗状态
@@ -667,9 +668,10 @@ export default class BattleScene extends Phaser.Scene {
     // 创建敌人
     this.createEnemyUnits();
     
-    console.log('单位创建完成 - 英雄: 1, 生物:', this.heroUnits.length - 1, '敌人:', this.enemyUnits.length);
-    console.log('英雄队伍:', this.heroUnits.map(h => `${h.name}(HP:${h.hp})`).join(', '));
-    console.log('生物上限: 5 (英雄不算在内)');
+    console.log('单位创建完成 - 英雄+生物:', this.heroUnits.length, '敌人:', this.enemyUnits.length);
+    this.heroUnits.forEach((h, i) => {
+      console.log(`  [${i}] ${h.name} at (${h.container?.x}, ${h.container?.y})`);
+    });
     
     this.addLog(`⚔️ 战斗开始！队伍: ${this.heroUnits.length}人`, '#ffd700');
     this.updateBattleUI();
