@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Rogue Quest - 羁绊系统单元测试</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+    .test-pass { background: #e8f5e9; border-left: 4px solid #4caf50; padding: 10px; margin: 5px 0; }
+    .test-fail { background: #ffebee; border-left: 4px solid #f44336; padding: 10px; margin: 5px 0; }
+    h2 { margin-top: 20px; }
+    #results { margin-top: 20px; }
+    .summary { font-size: 18px; font-weight: bold; padding: 15px; margin: 10px 0; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>🧪 Rogue Quest - 羁绊系统单元测试</h1>
+  <button onclick="runAllTests()">运行所有测试</button>
+  <div id="results"></div>
+
+  <script type="module">
+    // 复制核心逻辑进行测试
+    const SYNERGY_LEVELS = {
+      2: { required: 2, bonus: { attack: 0.05, defense: 0.05 } },
+      3: { required: 3, bonus: { attack: 0.10, defense: 0.10 } },
+      4: { required: 4, bonus: { attack: 0.15, defense: 0.15, hp: 0.10 } },
+      5: { required: 5, bonus: { attack: 0.20, defense: 0.20, hp: 0.15 } },
+      7: { required: 7, bonus: { attack: 0.30, defense: 0.30, hp: 0.25, special: 'ultimate' } },
+    };
+
+    // 修复后的函数
+    function getSynergyLevel(count) {
+      if (count >= 7) return 7;
+      if (count >= 5) return 5;
+      if (count >= 4) return 4;
+      if (count >= 3) return 3;
+      if (count >= 2) return 2;
+      return 0;
+    }
+
+    // 修复前的函数（用于对比）
+    function getSynergyLevelOld(count) {
+      if (count >= 7) return 5;
+      if (count >= 5) return 4;
+      if (count >= 4) return 3;
+      if (count >= 3) return 2;
+      if (count >= 2) return 1;
+      return 0;
+    }
+
+    let passCount = 0;
+    let failCount = 0;
+
+    function log(message, pass) {
+      const div = document.createElement('div');
+      div.className = pass ? 'test-pass' : 'test-fail';
+      div.innerHTML = message;
+      document.getElementById('results').appendChild(div);
+      if (pass) passCount++;
+      else failCount++;
+    }
+
+    function logSection(title) {
+      const h2 = document.createElement('h2');
+      h2.textContent = title;
+      document.getElementById('results').appendChild(h2);
+    }
+
+    window.runAllTests = function() {
+      document.getElementById('results').innerHTML = '';
+      passCount = 0;
+      failCount = 0;
+
+      // 测试1: 羁绊等级映射
+      logSection('测试1: 羁绊等级映射');
+
+      const tests = [
+        { count: 1, expected: 0 },
+        { count: 2, expected: 2 },
+        { count: 3, expected: 3 },
+        { count: 4, expected: 4 },
+        { count: 5, expected: 5 },
+        { count: 6, expected: 5 },
+        { count: 7, expected: 7 },
+        { count: 8, expected: 7 },
+        { count: 10, expected: 7 },
+      ];
+
+      tests.forEach(test => {
+        const result = getSynergyLevel(test.count);
+        const pass = result === test.expected;
+        log(`count=${test.count} → level=${result} (期望 ${test.expected}) ${pass ? '✓' : '✗'}`, pass);
+      });
+
+      // 测试2: SYNERGY_LEVELS 键存在性
+      logSection('测试2: SYNERGY_LEVELS 键存在性');
+
+      [2, 3, 4, 5, 7].forEach(level => {
+        const exists = SYNERGY_LEVELS[level] !== undefined;
+        log(`SYNERGY_LEVELS[${level}] 存在: ${exists ? '✓' : '✗'}`, exists);
+      });
+
+      // 测试3: 完整羁绊计算流程
+      logSection('测试3: 完整羁绊计算流程');
+
+      [2, 3, 4, 5, 7].forEach(count => {
+        const level = getSynergyLevel(count);
+        const config = SYNERGY_LEVELS[level];
+        if (config) {
+          const bonus = config.bonus;
+          log(`${count}个同种族 → 等级${level} → 攻击+${bonus.attack*100}%, 防御+${bonus.defense*100}% ✓`, true);
+        } else {
+          log(`${count}个同种族 → 等级${level} → SYNERGY_LEVELS[${level}] 不存在 ✗`, false);
+        }
+      });
+
+      // 测试4: 旧函数的问题
+      logSection('测试4: 旧函数的问题（对比）');
+
+      log(`旧函数 getSynergyLevel(2) → ${getSynergyLevelOld(2)} → SYNERGY_LEVELS[${getSynergyLevelOld(2)}] = ${SYNERGY_LEVELS[getSynergyLevelOld(2)]} ✗ (这是 bug!)`, false);
+      log(`新函数 getSynergyLevel(2) → ${getSynergyLevel(2)} → SYNERGY_LEVELS[${getSynergyLevel(2)}] = ${JSON.stringify(SYNERGY_LEVELS[getSynergyLevel(2)])} ✓`, true);
+
+      // 总结
+      const summary = document.createElement('div');
+      summary.className = 'summary';
+      summary.style.background = failCount === 0 ? '#e8f5e9' : '#fff3e0';
+      summary.innerHTML = `测试完成: ${passCount} 通过, ${failCount} 失败`;
+      document.getElementById('results').insertBefore(summary, document.getElementById('results').firstChild);
+    };
+  </script>
+</body>
+</html>
