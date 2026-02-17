@@ -197,13 +197,13 @@ export class CreatureManager {
     return synergies;
   }
   
-  // 获取羁绊等级
+  // 获取羁绊等级（返回对应的阈值，用作 SYNERGY_LEVELS 的键）
   private getSynergyLevel(count: number): number {
-    if (count >= 7) return 5;
-    if (count >= 5) return 4;
-    if (count >= 4) return 3;
-    if (count >= 3) return 2;
-    if (count >= 2) return 1;
+    if (count >= 7) return 7;
+    if (count >= 5) return 5;
+    if (count >= 4) return 4;
+    if (count >= 3) return 3;
+    if (count >= 2) return 2;
     return 0;
   }
   
