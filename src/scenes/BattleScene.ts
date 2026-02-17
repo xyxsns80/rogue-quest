@@ -636,6 +636,48 @@ export default class BattleScene extends Phaser.Scene {
 
   // ==================== 战斗流程 ====================
 
+  // 趣味战斗文本
+  private readonly FUNNY_TEXTS = {
+    crit: [
+      "💥 暴击！狠狠地打了！",
+      "💥 暴击！这一击让敌人怀疑人生！",
+      "💥 暴击！伤害爆表！",
+    ],
+    kill: [
+      "☠️ 退场了！",
+      "☠️ 再见，不送！",
+      "☠️ 下一辈子小心点！",
+      "☠️ 凉了！",
+    ],
+    dodge: [
+      "💨 挥空了！",
+      "💨 完美闪避！",
+      "💨 空气都打穿了！",
+    ],
+    synergy: {
+      castle: "⚔️ 城堡羁绊！骑士精神觉醒！",
+      necropolis: "💀 墓园羁绊！亡者归来！",
+      inferno: "🔥 地狱羁绊！烈焰燃烧！",
+      rampart: "🌲 森林羁绊！自然之力！",
+      stronghold: "🪓 据点羁绊！野蛮狂暴！",
+    },
+    battleStart: [
+      "⚔️ 战斗开始！冲冲冲！",
+      "⚔️ 战斗开始！让他们看看实力！",
+      "⚔️ 战斗开始！不要怂就是干！",
+    ],
+    victory: [
+      "🏆 胜利！这波稳了！",
+      "🏆 胜利！天下无敌！",
+      "🏆 胜利！还有谁？！",
+    ],
+  };
+
+  private getRandomText(category: keyof typeof this.FUNNY_TEXTS): string {
+    const texts = this.FUNNY_TEXTS[category] as string[];
+    return texts[Math.floor(Math.random() * texts.length)];
+  }
+
   async startBattle() {
     console.log('=== startBattle 开始 ===');
     console.log('屏幕尺寸:', this.cameras.main.width, 'x', this.cameras.main.height);
@@ -673,7 +715,7 @@ export default class BattleScene extends Phaser.Scene {
       console.log(`  [${i}] ${h.name} at (${h.container?.x}, ${h.container?.y})`);
     });
     
-    this.addLog(`⚔️ 战斗开始！队伍: ${this.heroUnits.length}人`, '#ffd700');
+    this.addLog(this.getRandomText('battleStart') + ` 队伍: ${this.heroUnits.length}人`, '#ffd700');
     this.updateBattleUI();
     
     // 初始化技能
@@ -836,6 +878,11 @@ export default class BattleScene extends Phaser.Scene {
     // 显示伤害数字
     this.showDamageNumber(target, damage, isCrit);
     
+    // 暴击趣味文本
+    if (isCrit) {
+      this.addLog(this.getRandomText('crit'), '#ff4444');
+    }
+    
     // 目标抖动
     this.tweens.add({
       targets: target.container,
@@ -925,6 +972,8 @@ export default class BattleScene extends Phaser.Scene {
     this.addLog(`${attacker.name} → ${target.name} ${damage}${critText}`, attacker.isEnemy ? '#ff4444' : '#4CAF50');
     
     if (target.hp <= 0) {
+      // 击杀趣味文本
+      this.addLog(`${target.name} ${this.getRandomText('kill')}`, target.isEnemy ? '#9c27b0' : '#f44336');
       await this.playDeath(target);
       
       // 奖励（仅敌人死亡时）
@@ -935,7 +984,7 @@ export default class BattleScene extends Phaser.Scene {
         this.exp += expReward;
         this.stageGold += goldReward;  // 记录当前小关卡奖励
         this.stageExp += expReward;
-        this.addLog(`💀 +${goldReward}💰 +${expReward}⚡`, '#ffd700');
+        this.addLog(`💰 +${goldReward} ⚡ +${expReward}`, '#ffd700');
         this.checkLevelUp();
       }
     }
@@ -1004,6 +1053,9 @@ export default class BattleScene extends Phaser.Scene {
 
   async battleVictory() {
     this.isBattleEnded = true;
+    
+    // 胜利趣味文本
+    this.addLog(this.getRandomText('victory'), '#ffd700');
     
     if (this.currentStage >= STAGES_PER_CHAPTER) {
       // 大关卡通过！
