@@ -60,6 +60,9 @@ const STAGES_PER_CHAPTER = 16;  // 每个大关卡有16个小关卡
 
 // ==================== BattleScene ====================
 
+// 敌人信息揭示阶段
+type RevealStage = 'hidden' | 'basic' | 'details' | 'full';
+
 export default class BattleScene extends Phaser.Scene {
   // 单位
   private heroUnits: Unit[] = [];
@@ -80,6 +83,8 @@ export default class BattleScene extends Phaser.Scene {
   private battleLog: string[] = [];
   private stageGold: number = 0;  // 当前小关卡获得的金币
   private stageExp: number = 0;   // 当前小关卡获得的经验
+  private revealStage: RevealStage = 'hidden';  // 敌人信息揭示阶段
+  private roundCount: number = 0;  // 回合计数
   
   // UI 元素
   private battleLevelEl!: HTMLElement;
@@ -87,6 +92,7 @@ export default class BattleScene extends Phaser.Scene {
   private battleHpTextEl!: HTMLElement;
   private battleGoldEl!: HTMLElement;
   private battleExpEl!: HTMLElement;
+  private enemyInfoEl!: HTMLElement;  // 敌人信息显示
   private battleLogEl!: HTMLElement;
   private battleModeEl!: HTMLElement;
   private battleBackBtn!: HTMLElement;
@@ -196,6 +202,7 @@ export default class BattleScene extends Phaser.Scene {
     this.battleHpFillEl = document.getElementById('battle-hp-fill')!;
     this.battleHpTextEl = document.getElementById('battle-hp-text')!;
     this.battleGoldEl = document.getElementById('battle-gold')!;
+    this.enemyInfoEl = document.getElementById('enemy-info-text')!;  // 敌人信息
     
     // 队伍和羁绊显示
     this.teamCountEl = document.getElementById('team-count')!;
@@ -226,6 +233,9 @@ export default class BattleScene extends Phaser.Scene {
     this.battleHpTextEl.textContent = `HP: ${Math.floor(totalHp)}/${totalMaxHp}`;
     this.battleGoldEl.textContent = this.gold.toString();
     this.battleExpEl.textContent = this.exp.toString();
+    
+    // 更新敌人信息
+    this.enemyInfoEl.textContent = this.getEnemyInfo();
     
     // 更新队伍显示
     this.updateTeamDisplay();
@@ -686,6 +696,8 @@ export default class BattleScene extends Phaser.Scene {
     // 完全重置战斗状态
     this.isBattleEnded = false;
     this.isPaused = false;
+    this.revealStage = 'hidden';  // 重置揭示阶段
+    this.roundCount = 0;  // 重置回合计数
     
     // 清理所有旧单位
     this.heroUnits.forEach(unit => {
@@ -757,6 +769,10 @@ export default class BattleScene extends Phaser.Scene {
     // 更新冷却
     this.updateCooldowns();
     
+    // 推进敌人信息揭示
+    this.roundCount++;
+    this.advanceRevealStage();
+    
     // 更新UI
     this.updateBattleUI();
     
@@ -821,6 +837,40 @@ export default class BattleScene extends Phaser.Scene {
       s.currentCooldown === 0 && Math.random() < s.triggerChance
     );
     return available.length > 0 ? available[0] : null;
+  }
+
+  // ==================== 敌人信息揭示系统 ====================
+
+  advanceRevealStage() {
+    if (this.roundCount >= 1 && this.revealStage === 'hidden') {
+      this.revealStage = 'basic';
+      this.addLog('🔍 敌人信息揭示：数量', '#9c27b0');
+    } else if (this.roundCount >= 2 && this.revealStage === 'basic') {
+      this.revealStage = 'details';
+      this.addLog('🔍 敌人信息揭示：属性', '#9c27b0');
+    } else if (this.roundCount >= 3 && this.revealStage === 'details') {
+      this.revealStage = 'full';
+      this.addLog('🔍 敌人信息完全揭示！', '#9c27b0');
+    }
+  }
+
+  getEnemyInfo(): string {
+    const aliveEnemies = this.enemyUnits.filter(e => e.hp > 0);
+    
+    switch (this.revealStage) {
+      case 'hidden':
+        return `敌人: ??? (击败后揭示)`;
+      case 'basic':
+        return `敌人: ${aliveEnemies.length}个`;
+      case 'details':
+        const totalHp = aliveEnemies.reduce((sum, e) => sum + e.hp, 0);
+        const avgAtk = aliveEnemies.length > 0 
+          ? Math.floor(aliveEnemies.reduce((sum, e) => sum + e.attack, 0) / aliveEnemies.length)
+          : 0;
+        return `敌人: ${aliveEnemies.length}个 | 总HP: ${totalHp} | 平均攻击: ${avgAtk}`;
+      case 'full':
+        return aliveEnemies.map(e => `${e.name}(HP:${Math.floor(e.hp)} ATK:${e.attack})`).join(' | ');
+    }
   }
 
   // ==================== 攻击动画 ====================

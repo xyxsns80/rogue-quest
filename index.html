@@ -516,6 +516,22 @@
       color: #7fff7f;
     }
     
+    /* 敌人信息栏 */
+    .enemy-info-bar {
+      flex-shrink: 0;
+      padding: var(--spacing-xs) var(--spacing-md);
+      padding-left: calc(var(--spacing-md) + var(--safe-left));
+      padding-right: calc(var(--spacing-md) + var(--safe-right));
+      background: rgba(244, 67, 54, 0.15);
+      border-bottom: 1px solid rgba(244, 67, 54, 0.2);
+      pointer-events: auto;
+    }
+    
+    .enemy-info-text {
+      color: var(--text-secondary);
+      font-size: 11px;
+    }
+    
     /* 战斗区域 - 中间 Canvas */
     .battle-canvas-area {
       flex: 1;
@@ -915,6 +931,11 @@
         <div class="battle-gold">💰 <span id="battle-gold">0</span></div>
         <div class="battle-exp">⚡ <span id="battle-exp">0</span></div>
       </div>
+    </div>
+    
+    <!-- 敌人信息显示 -->
+    <div class="enemy-info-bar" id="enemy-info-bar">
+      <span class="enemy-info-text" id="enemy-info-text">敌人: ???</span>
     </div>
     
     <!-- 队伍和羁绊显示 -->
