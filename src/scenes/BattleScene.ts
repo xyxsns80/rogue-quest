@@ -382,7 +382,6 @@ export default class BattleScene extends Phaser.Scene {
     const centerY = this.cameras.main.height / 2;
     const backX = 120;    // 后排X坐标（远离敌人）
     const frontX = 180;   // 前排X坐标（靠近敌人）
-    const ySpacing = 70;  // Y间距
     
     // 分离前后排生物
     const frontCreatures: { creature: typeof creatures[0]; def: NonNullable<ReturnType<typeof getCreatureById>>; index: number }[] = [];
@@ -400,6 +399,13 @@ export default class BattleScene extends Phaser.Scene {
     });
     
     console.log(`前排生物: ${frontCreatures.length}, 后排生物: ${backCreatures.length}`);
+    
+    // 根据生物数量动态计算Y间距，确保不超出屏幕
+    const maxCreaturesInRow = Math.max(frontCreatures.length, backCreatures.length, 1);
+    const availableHeight = this.cameras.main.height - 100;
+    const ySpacing = Math.min(70, availableHeight / (maxCreaturesInRow + 1));
+    
+    console.log(`Y间距: ${ySpacing} (最大70, 可用高度: ${availableHeight})`);
     
     // 创建前排单位
     frontCreatures.forEach((item, i) => {
