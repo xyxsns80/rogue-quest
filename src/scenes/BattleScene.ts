@@ -380,8 +380,8 @@ export default class BattleScene extends Phaser.Scene {
     }
     
     const centerY = this.cameras.main.height / 2;
-    const backX = 120;    // 后排X坐标（远离敌人）
-    const frontX = 180;   // 前排X坐标（靠近敌人）
+    const backX = 140;    // 后排X坐标（远离敌人）
+    const frontX = 220;   // 前排X坐标（靠近敌人）
     
     // 分离前后排生物
     const frontCreatures: { creature: typeof creatures[0]; def: NonNullable<ReturnType<typeof getCreatureById>>; index: number }[] = [];
