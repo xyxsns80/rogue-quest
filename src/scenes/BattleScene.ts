@@ -467,27 +467,50 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   createEnemyUnits() {
-    // 根据大关卡和小关卡计算难度
-    const count = Math.min(1 + Math.floor(this.currentChapter / 3), 5);
+    // 根据大关卡和小关卡计算基础难度
+    const baseCount = Math.min(1 + Math.floor(this.currentChapter / 3), 5);
     const baseHp = 50 + this.currentChapter * 30 + this.currentStage * 5;
     const baseAttack = 5 + this.currentChapter * 3 + this.currentStage;
     
+    // 敌人肉鸽强化 - 根据玩家队伍强度调整
+    const playerPower = this.calculatePlayerPower();
+    const enemyBuffs = this.generateEnemyBuffs(playerPower);
+    
+    console.log(`敌人强化: 玩家战力=${playerPower}, 强化数量=${enemyBuffs.length}`);
+    
+    const count = baseCount + Math.floor(enemyBuffs.length / 3);  // 每3个强化+1个敌人
     const sprites = ['👺', '👹', '👻', '💀', '🧟'];
     
     for (let i = 0; i < count; i++) {
+      // 应用肉鸽强化
+      let hp = baseHp;
+      let attack = baseAttack;
+      let defense = 2;
+      let critRate = 0.05;
+      let critDamage = 1.5;
+      let speed = 8 + Math.floor(this.currentChapter / 2);
+      
+      enemyBuffs.forEach(buff => {
+        if (buff.type === 'hp') hp *= buff.value;
+        if (buff.type === 'attack') attack *= buff.value;
+        if (buff.type === 'defense') defense += buff.value;
+        if (buff.type === 'crit') critRate += buff.value;
+        if (buff.type === 'speed') speed *= buff.value;
+      });
+      
       const enemy: Unit = {
         id: `enemy_${i}`,
         name: `敌人${i + 1}`,
         isEnemy: true,
         index: i,
         level: this.currentChapter,
-        hp: baseHp,
-        maxHp: baseHp,
-        attack: baseAttack,
-        defense: 2,
-        speed: 8 + Math.floor(this.currentChapter / 2),
-        critRate: 0.05,
-        critDamage: 1.5,
+        hp: Math.floor(hp),
+        maxHp: Math.floor(hp),
+        attack: Math.floor(attack),
+        defense: Math.floor(defense),
+        speed: Math.floor(speed),
+        critRate: Math.min(critRate, 0.5),  // 最高50%暴击
+        critDamage: critDamage,
         sprite: sprites[i % sprites.length]
       };
       
@@ -496,6 +519,60 @@ export default class BattleScene extends Phaser.Scene {
       const y = this.cameras.main.height / 2 - 60 + i * 70;
       this.createUnitSprite(enemy, this.cameras.main.width - 80, y);
     }
+  }
+  
+  // 计算玩家战力
+  calculatePlayerPower(): number {
+    let power = 0;
+    this.heroUnits.forEach(unit => {
+      power += unit.hp + unit.attack * 10 + unit.defense * 5;
+    });
+    
+    // 加上生物数量加成
+    const creatures = this.getCreatureManager().getTeam();
+    power += creatures.length * 50;
+    
+    // 加上星级加成
+    creatures.forEach(c => {
+      power += c.star * 30;
+    });
+    
+    return power;
+  }
+  
+  // 生成敌人肉鸽强化
+  generateEnemyBuffs(playerPower: number): { type: string; value: number; name: string }[] {
+    const buffs: { type: string; value: number; name: string }[] = [];
+    
+    // 根据小关卡数量生成强化（每个小关卡敌人获得1-2个强化）
+    const buffCount = Math.min(this.currentStage, 8);
+    
+    const allBuffs = [
+      { type: 'hp', value: 1.1, name: '生命+10%' },
+      { type: 'hp', value: 1.15, name: '生命+15%' },
+      { type: 'attack', value: 1.08, name: '攻击+8%' },
+      { type: 'attack', value: 1.12, name: '攻击+12%' },
+      { type: 'defense', value: 2, name: '护甲+2' },
+      { type: 'defense', value: 3, name: '护甲+3' },
+      { type: 'crit', value: 0.05, name: '暴击+5%' },
+      { type: 'speed', value: 1.1, name: '速度+10%' },
+    ];
+    
+    // 随机选择强化
+    for (let i = 0; i < buffCount; i++) {
+      const buff = allBuffs[Math.floor(Math.random() * allBuffs.length)];
+      buffs.push(buff);
+    }
+    
+    // 如果玩家战力很高，额外添加强化
+    if (playerPower > 500) {
+      buffs.push({ type: 'attack', value: 1.1, name: '精英攻击+10%' });
+    }
+    if (playerPower > 800) {
+      buffs.push({ type: 'hp', value: 1.2, name: '精英生命+20%' });
+    }
+    
+    return buffs;
   }
 
   createUnitSprite(unit: Unit, x: number, y: number) {
