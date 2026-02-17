@@ -162,6 +162,7 @@ export class CreatureManager {
   
   // 计算羁绊
   calculateSynergies(): Synergy[] {
+    console.log('=== calculateSynergies ===');
     const raceCount: Record<string, number> = {};
     
     // 统计各种族数量
@@ -169,8 +170,13 @@ export class CreatureManager {
       const def = getCreatureById(c.creatureId);
       if (def) {
         raceCount[def.race] = (raceCount[def.race] || 0) + 1;
+        console.log(`生物 ${c.creatureId} 种族: ${def.race}`);
+      } else {
+        console.warn(`无法找到生物定义: ${c.creatureId}`);
       }
     });
+    
+    console.log('种族统计:', Object.entries(raceCount).map(([r, c]) => `${r}:${c}`).join(', '));
     
     // 计算羁绊等级
     const synergies: Synergy[] = [];
@@ -184,6 +190,7 @@ export class CreatureManager {
           level,
           bonus: { ...levelConfig.bonus },
         });
+        console.log(`羁绊激活: ${race} 等级${level} (数量:${count})`);
       }
     }
     
@@ -202,8 +209,13 @@ export class CreatureManager {
   
   // 获取生物完整属性（含星级+羁绊加成）
   getCreatureStats(creature: BattleCreature) {
+    console.log('=== getCreatureStats ===', creature.creatureId, 'star:', creature.star);
+    
     const def = getCreatureById(creature.creatureId);
-    if (!def) return null;
+    if (!def) {
+      console.error('无法找到生物定义:', creature.creatureId);
+      return null;
+    }
     
     let hp = def.baseHp;
     let attack = def.baseAttack;
@@ -222,14 +234,22 @@ export class CreatureManager {
       defense += def.starBonus[3].def;
     }
     
+    console.log(`基础属性: HP:${hp} ATK:${attack} DEF:${defense} SPD:${speed}`);
+    
     // 羁绊加成
-    const synergies = this.calculateSynergies();
-    const raceSynergy = synergies.find(s => s.race === def.race);
-    if (raceSynergy) {
-      hp = Math.floor(hp * (1 + (raceSynergy.bonus.hp || 0)));
-      attack = Math.floor(attack * (1 + (raceSynergy.bonus.attack || 0)));
-      defense = Math.floor(defense * (1 + (raceSynergy.bonus.defense || 0)));
-      speed = Math.floor(speed * (1 + (raceSynergy.bonus.speed || 0)));
+    try {
+      const synergies = this.calculateSynergies();
+      const raceSynergy = synergies.find(s => s.race === def.race);
+      if (raceSynergy) {
+        console.log(`应用羁绊加成: ${def.race} 等级${raceSynergy.level}`);
+        hp = Math.floor(hp * (1 + (raceSynergy.bonus.hp || 0)));
+        attack = Math.floor(attack * (1 + (raceSynergy.bonus.attack || 0)));
+        defense = Math.floor(defense * (1 + (raceSynergy.bonus.defense || 0)));
+        speed = Math.floor(speed * (1 + (raceSynergy.bonus.speed || 0)));
+        console.log(`加成后: HP:${hp} ATK:${attack} DEF:${defense} SPD:${speed}`);
+      }
+    } catch (e) {
+      console.error('羁绊计算出错:', e);
     }
     
     return { hp, attack, defense, speed };
