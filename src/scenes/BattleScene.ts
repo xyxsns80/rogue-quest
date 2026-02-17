@@ -98,6 +98,11 @@ export default class BattleScene extends Phaser.Scene {
   private levelGoldEl!: HTMLElement;
   private levelExpEl!: HTMLElement;
   private levelSkillOptionsEl!: HTMLElement;
+  
+  // 队伍和羁绊显示
+  private teamCountEl!: HTMLElement;
+  private teamUnitsEl!: HTMLElement;
+  private synergyDisplayEl!: HTMLElement;
 
   constructor() {
     super({ key: 'BattleScene' });
@@ -191,6 +196,11 @@ export default class BattleScene extends Phaser.Scene {
     this.battleHpFillEl = document.getElementById('battle-hp-fill')!;
     this.battleHpTextEl = document.getElementById('battle-hp-text')!;
     this.battleGoldEl = document.getElementById('battle-gold')!;
+    
+    // 队伍和羁绊显示
+    this.teamCountEl = document.getElementById('team-count')!;
+    this.teamUnitsEl = document.getElementById('team-units')!;
+    this.synergyDisplayEl = document.getElementById('synergy-display')!;
     this.battleExpEl = document.getElementById('battle-exp')!;
     this.battleLogEl = document.getElementById('battle-log-text')!;
     this.battleModeEl = document.getElementById('battle-mode')!;
@@ -216,6 +226,80 @@ export default class BattleScene extends Phaser.Scene {
     this.battleHpTextEl.textContent = `HP: ${Math.floor(totalHp)}/${totalMaxHp}`;
     this.battleGoldEl.textContent = this.gold.toString();
     this.battleExpEl.textContent = this.exp.toString();
+    
+    // 更新队伍显示
+    this.updateTeamDisplay();
+  }
+  
+  updateTeamDisplay() {
+    const cm = this.getCreatureManager();
+    const creatures = cm.getTeam();
+    const synergies = cm.calculateSynergies();
+    
+    // 更新队伍数量
+    this.teamCountEl.textContent = (creatures.length + 1).toString(); // +1 是英雄
+    
+    // 生成队伍单位显示
+    let unitsHtml = '';
+    
+    // 英雄
+    const hero = this.heroUnits[0];
+    if (hero) {
+      const heroHpPercent = hero.maxHp > 0 ? (hero.hp / hero.maxHp) * 100 : 0;
+      unitsHtml += `
+        <div class="team-unit hero">
+          <span class="icon">${hero.sprite}</span>
+          <div class="hp-bar"><div class="hp-fill" style="width: ${heroHpPercent}%"></div></div>
+        </div>
+      `;
+    }
+    
+    // 生物
+    creatures.forEach((creature, index) => {
+      const def = getCreatureById(creature.creatureId);
+      if (def) {
+        const unit = this.heroUnits[index + 1]; // +1 因为0是英雄
+        const hpPercent = unit && unit.maxHp > 0 ? (unit.hp / unit.maxHp) * 100 : 100;
+        const stars = '★'.repeat(creature.star);
+        unitsHtml += `
+          <div class="team-unit">
+            <span class="icon">${def.icon}</span>
+            <span class="stars">${stars}</span>
+            <div class="hp-bar"><div class="hp-fill" style="width: ${hpPercent}%"></div></div>
+          </div>
+        `;
+      }
+    });
+    
+    this.teamUnitsEl.innerHTML = unitsHtml;
+    
+    // 生成羁绊显示
+    let synergyHtml = '';
+    const raceNames: Record<string, string> = {
+      castle: '🏰 城堡',
+      necropolis: '💀 墓园',
+      inferno: '🔥 地狱',
+      rampart: '🌲 森林',
+      stronghold: '⚔️ 据点'
+    };
+    
+    synergies.forEach(synergy => {
+      const name = raceNames[synergy.race] || synergy.race;
+      const bonusText = [];
+      if (synergy.bonus.attack) bonusText.push(`攻+${synergy.bonus.attack * 100}%`);
+      if (synergy.bonus.defense) bonusText.push(`防+${synergy.bonus.defense * 100}%`);
+      if (synergy.bonus.hp) bonusText.push(`血+${synergy.bonus.hp * 100}%`);
+      
+      synergyHtml += `
+        <div class="synergy-badge">
+          <span class="name">${name}</span>
+          <span class="count">×${synergy.count}</span>
+          <span class="bonus">${bonusText.join(' ')}</span>
+        </div>
+      `;
+    });
+    
+    this.synergyDisplayEl.innerHTML = synergyHtml;
   }
 
   bindEvents() {

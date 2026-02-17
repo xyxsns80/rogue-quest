@@ -522,6 +522,104 @@
       position: relative;
     }
     
+    /* 队伍显示区域 */
+    .team-display {
+      flex-shrink: 0;
+      padding: var(--spacing-sm) var(--spacing-md);
+      background: rgba(0, 0, 0, 0.5);
+      pointer-events: none;
+    }
+    
+    .team-title {
+      color: var(--text-secondary);
+      font-size: 11px;
+      margin-bottom: var(--spacing-xs);
+    }
+    
+    .team-units {
+      display: flex;
+      gap: var(--spacing-xs);
+      overflow-x: auto;
+      padding-bottom: var(--spacing-xs);
+    }
+    
+    .team-unit {
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
+      background: rgba(102, 126, 234, 0.2);
+      border: 1px solid var(--accent);
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+    }
+    
+    .team-unit.hero {
+      border-color: var(--gold);
+      background: rgba(255, 215, 0, 0.2);
+    }
+    
+    .team-unit .icon {
+      font-size: 18px;
+    }
+    
+    .team-unit .stars {
+      position: absolute;
+      bottom: -2px;
+      font-size: 6px;
+      color: var(--gold);
+    }
+    
+    .team-unit .hp-bar {
+      position: absolute;
+      bottom: 2px;
+      left: 2px;
+      right: 2px;
+      height: 2px;
+      background: #333;
+      border-radius: 1px;
+    }
+    
+    .team-unit .hp-fill {
+      height: 100%;
+      background: var(--green);
+      border-radius: 1px;
+    }
+    
+    /* 羁绊显示 */
+    .synergy-display {
+      display: flex;
+      gap: var(--spacing-xs);
+      margin-top: var(--spacing-xs);
+      flex-wrap: wrap;
+    }
+    
+    .synergy-badge {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 6px;
+      background: rgba(102, 126, 234, 0.3);
+      border-radius: 10px;
+      font-size: 10px;
+      color: var(--text-primary);
+    }
+    
+    .synergy-badge .name {
+      color: var(--gold);
+    }
+    
+    .synergy-badge .count {
+      color: var(--text-secondary);
+    }
+    
+    .synergy-badge .bonus {
+      color: var(--green);
+    }
+    
     /* 战斗底部控制 */
     .battle-bottom {
       flex-shrink: 0;
@@ -816,6 +914,17 @@
       <div class="battle-stats">
         <div class="battle-gold">💰 <span id="battle-gold">0</span></div>
         <div class="battle-exp">⚡ <span id="battle-exp">0</span></div>
+      </div>
+    </div>
+    
+    <!-- 队伍和羁绊显示 -->
+    <div class="team-display" id="team-display">
+      <div class="team-title">👥 队伍 (<span id="team-count">1</span>/6)</div>
+      <div class="team-units" id="team-units">
+        <!-- 动态生成队伍单位 -->
+      </div>
+      <div class="synergy-display" id="synergy-display">
+        <!-- 动态生成羁绊效果 -->
       </div>
     </div>
     
